@@ -1,0 +1,127 @@
+use kenyaemr_etl;
+SET @endDate=current_date();
+SELECT
+(CASE
+   WHEN f.patient_id <>"" THEN f.patient_id 
+   WHEN p.patient_id <>"" THEN p.patient_id
+   ELSE ecic.patient_id
+   END )AS patientID,
+i.siteCode,
+i.FacilityName,
+epd.unique_patient_no,
+if(pi.identifier_type=5, pi.identifier, null) as NationalID_no,
+epd.Gender,
+epd.phone_number,
+DATE_FORMAT(FROM_DAYS(DATEDIFF(ecic.latest_vis_date,epd.DOB)), '%Y')+0 AS AgeatLastVisit,
+ecic.latest_tca,
+ecic.latest_vis_date,
+CASE
+   WHEN p.ever_vaccinated IN(1065,1066) THEN  p.visit_date
+   WHEN f.ever_vaccinated IN(1065,1066) THEN  f.visit_date
+   ELSE 'Missing' 
+   END AS Covid19AssessmentDate,
+CASE 
+    WHEN p.ever_vaccinated IN(1065) OR f.ever_vaccinated IN(1065) THEN 'Yes'
+     WHEN p.ever_vaccinated IN(1066) OR f.ever_vaccinated IN(1066) THEN 'No'
+    ELSE 'Null'
+    END AS 'EverVaccinated',
+(CASE
+			 WHEN p.first_dose_date<>"" THEN p.first_dose_date
+			 WHEN f.first_dose_date<>"" THEN f.first_dose_date
+			 END) as DateGivenFirstDose,
+(CASE 
+            when p.first_vaccine_type IN (166156) OR f.first_vaccine_type IN (166156) then 'Astrazeneca'
+            when p.first_vaccine_type IN (166355) OR f.first_vaccine_type IN (166355) then 'Johnson and Johnson'
+            when p.first_vaccine_type IN (166154) OR f.first_vaccine_type IN (166154) then 'Moderna'
+            when p.first_vaccine_type IN (166155) OR f.first_vaccine_type IN (166155) then 'Pfizer'
+            when p.first_vaccine_type IN (166157) OR f.first_vaccine_type IN (166157) then 'Sputnik'
+            when p.first_vaccine_type IN (166379) OR f.first_vaccine_type IN (166379) then 'Sinopharm'
+            when p.first_vaccine_type IN (1067) OR f.first_vaccine_type IN (1067) then 'Unknown'
+            when p.first_vaccine_type IN (5622) OR f.first_vaccine_type IN (5622) then 'Other'
+            END )AS FirstDoseVaccineAdministered,
+(CASE
+			 WHEN p.second_dose_date<>"" THEN p.second_dose_date
+			 WHEN f.second_dose_date<>"" THEN f.second_dose_date
+			 END) as DateGivenSecondDose,
+(CASE 
+            when p.second_vaccine_type IN (166156) OR f.second_vaccine_type IN (166156) then 'Astrazeneca'
+            when p.second_vaccine_type IN (166355) OR f.second_vaccine_type IN (166355) then 'Johnson and Johnson'
+            when p.second_vaccine_type IN (166154) OR f.second_vaccine_type IN (166154) then 'Moderna'
+            when p.second_vaccine_type IN (166155) OR f.second_vaccine_type IN (166155) then 'Pfizer'
+            when p.second_vaccine_type IN (166157) OR f.second_vaccine_type IN (166157) then 'Sputnik'
+            when p.second_vaccine_type IN (166379) OR f.second_vaccine_type IN (166379) then 'Sinopharm'
+            when p.second_vaccine_type IN (1067) OR f.second_vaccine_type IN (1067) then 'Unknown'
+            when p.second_vaccine_type IN (5622) OR f.second_vaccine_type IN (5622) then 'Other'
+            END )  as SecondDoseVaccineAdministered,
+CASE
+   WHEN p.final_vaccination_status THEN 'PartiallyVaccinated'
+   WHEN f.final_vaccination_status THEN 'FullyVaccinated'
+   WHEN p.ever_vaccinated IN(1066) or p.ever_vaccinated ="" THEN 'PartiallyVaccinated'
+   WHEN p.ever_vaccinated="" THEN 'FullyVaccinated'
+   ELSE 'NotVaccinated'
+   END AS 'FinalVaccinationStatus',
+ (CASE f.ever_received_booster 
+             WHEN 1065 THEN 'Yes' 
+             WHEN 1066 THEN 'No' 
+             end) as BoosterGiven,
+ (CASE
+            WHEN f.booster_vaccine_taken IN (166156) THEN 'Astrazeneca'
+            WHEN f.booster_vaccine_taken IN (166355) THEN 'Johnson and Johnson'
+            WHEN f.booster_vaccine_taken IN (166154) THEN 'Moderna'
+            WHEN f.booster_vaccine_taken IN (166155) THEN 'Pfizer'
+            WHEN f.booster_vaccine_taken IN (166157) THEN 'Sputnik'
+            WHEN f.booster_vaccine_taken IN (166379) THEN 'Sinopharm'
+            WHEN f.booster_vaccine_taken IN (1067) THEN 'Unknown'
+            WHEN f.booster_vaccine_taken IN (5622) THEN 'Other(Specify)' end) as BoosterDose,
+(CASE
+    WHEN f.date_created<>"" THEN f.date_created
+    WHEN p.date_created<>"" THEN p.date_created
+    END) AS DateCreated
+FROM kenyaemr_etl.etl_current_in_care ecic 
+INNER JOIN kenyaemr_etl.etl_patient_demographics epd ON ecic.patient_id=epd.patient_id
+INNER JOIN openmrs.patient_identifier pi ON ecic.patient_id = pi.patient_id
+LEFT OUTER JOIN (
+		select 
+		  a.patient_id,
+		  pd.unique_patient_no,
+		  a.visit_date,
+		  a.ever_vaccinated,
+          a.first_vaccine_type,
+          a.first_dose_date,
+          a.first_vaccination_verified,
+          a.second_vaccine_type,
+          a.second_dose_date,
+          a.second_vaccination_verified,
+		  a.final_vaccination_status,
+          a.ever_received_booster,
+          a.booster_vaccine_taken,
+          a.date_created
+          
+		from kenyaemr_etl.etl_covid19_assessment a
+		inner join kenyaemr_etl.etl_patient_demographics pd ON a.patient_id = pd.patient_id
+		group by patient_id
+		having mid(max(concat(visit_date,final_vaccination_status)),11) = 166192 and max(visit_date) <= date(@endDate)
+) as p on ecic.patient_id=p.patient_id
+left outer join (
+		select 
+		  a.patient_id,
+		  pd.unique_patient_no,
+          a.visit_date,
+		  a.ever_vaccinated,
+          a.first_vaccine_type,
+          a.first_dose_date,
+          a.first_vaccination_verified,
+          a.second_vaccine_type,
+          a.second_dose_date,
+          a.second_vaccination_verified,
+		  a.final_vaccination_status,
+          a.ever_received_booster,
+          a.booster_vaccine_taken,
+          a.date_created
+		from kenyaemr_etl.etl_covid19_assessment a 
+		inner join kenyaemr_etl.etl_patient_demographics pd ON a.patient_id = pd.patient_id
+		where a.final_vaccination_status = 5585 and a.visit_date <= date(@endDate)
+		group by a.patient_id
+) as f on ecic.patient_id=f.patient_id,
+kenyaemr_etl.etl_default_facility_info i
+group by ecic.patient_id

@@ -1,0 +1,44 @@
+use kenyaemr_etl;
+select
+     
+	 edfi.FacilityName,
+     epd.unique_patient_no,
+     adac.patient_id,
+     cic.dob,
+     cic.Gender,
+     cic.latest_vis_date,
+     CASE
+		  WHEN cic.stability IN (1) THEN 'stable'
+		  WHEN cic.stability IN (2) THEN 'unstable'
+		  ELSE 'null'
+          END AS 'StbailityStatus',
+     -- epd.education_level,
+	 max(adac.visit_date) as LatestScreeningDate,
+	 CASE 
+       WHEN adac.alcohol_drinking_frequency IN (1090) THEN 'Never'
+       WHEN adac.alcohol_drinking_frequency IN (1093) THEN '2 to 3 times a week'
+       WHEN adac.alcohol_drinking_frequency IN (1094) THEN '4 to 5 times a week'
+       WHEN adac.alcohol_drinking_frequency IN (1093) THEN '2 to 4 times a month'
+       ELSE adac.alcohol_drinking_frequency
+       END AS AlcoholDrinkingFreq,
+	 CASE 
+       WHEN adac.smoking_frequency IN (1090) THEN 'Never'
+       WHEN adac.smoking_frequency IN (163197) THEN 'Current some day smoker'
+       WHEN adac.smoking_frequency IN (163195) THEN 'Current heavy tobacco smoker'
+       WHEN adac.smoking_frequency IN (163196) THEN 'Current light tobacco smoker'
+       WHEN adac.smoking_frequency IN (156358) THEN 'Current light tobacco smoker'
+       ELSE adac.smoking_frequency
+       END AS SmokingFreq,
+	CASE
+	   WHEN adac.drugs_use_frequency IN (1090) THEN 'Never'
+       WHEN adac.drugs_use_frequency IN (1091) THEN 'Monthly or less'
+       WHEN adac.drugs_use_frequency IN (1093) THEN '2 to 3 times a week'
+       WHEN adac.drugs_use_frequency IN (1094) THEN '4 to 5 times a week'
+       ELSE adac.drugs_use_frequency
+       END AS DrugUseFreq,
+     cic.latest_tca
+from kenyaemr_etl.etl_alcohol_drug_abuse_screening adac
+inner join kenyaemr_etl.etl_current_in_care cic ON adac.patient_id=cic.patient_id
+inner join kenyaemr_etl.etl_patient_demographics epd ON cic.patient_id=epd.patient_id,
+kenyaemr_etl.etl_default_facility_info edfi
+group by patient_id

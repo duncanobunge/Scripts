@@ -1,0 +1,21 @@
+use kenyaemr_etl;
+set @endDate='2022-04-30';
+set @startDate='2022-04-01';
+select
+ ecv.client_id,
+ epf.patient_id
+from kenyaemr_etl.etl_clinical_visit ecv
+left outer join (
+select
+epf.patient_id
+from kenyaemr_etl.etl_prep_followup epf
+where epf.visit_date between @startDate and @endDate and treatment_plan in ('Continue')
+) as epf on ecv.client_id=epf.patient_id
+where ecv.visit_date between @startDate and @endDate
+and ecv.test_frequency IN ('Repeat');
+
+
+
+
+
+

@@ -1,0 +1,88 @@
+use openmrs;
+SELECT 
+	 eme.patient_id,
+	 epd.unique_patient_no,
+	 epd.DOB,
+	 epd.marital_status,
+	 epd.education_level,
+	 epd.Gender,
+	 epd.occupation,
+	   CASE
+		 WHEN  ehe.entry_point =160539  THEN 'Voluntary counseling and testing program'
+		 WHEN  ehe.entry_point =160538  THEN 'Prevention of maternal to child transmission program'
+		 WHEN  ehe.entry_point = 160537  THEN 'Pediatric inpatient service'
+		 WHEN  ehe.entry_point = 160536  THEN 'Adult inpatient service'
+		 WHEN  ehe.entry_point = 160542  THEN 'Outpatient department'
+		 WHEN  ehe.entry_point = 160541  THEN 'Tuberculosis treatment program' 
+		 WHEN  ehe.entry_point = 160543  THEN 'Community-based organization'
+		 WHEN  ehe.entry_point = 160544  THEN 'Under five clinic' 
+		 WHEN  ehe.entry_point = 160545  THEN 'Outreach program' 
+		 WHEN  ehe.entry_point = 160546  THEN 'Sexually transmitted infection program/clinic' 
+		 WHEN  ehe.entry_point = 160547 THEN 'Private company' 
+		 WHEN  ehe.entry_point = 160548 THEN 'Intravenous venous drug user outreach program' 
+		 WHEN  ehe.entry_point = 160549 THEN 'Adolescent outreach program'
+		 WHEN  ehe.entry_point = 160550 THEN 'Sex worker outreach program'
+		 WHEN  ehe.entry_point = 160551 THEN 'Self-referral' 
+		 WHEN  ehe.entry_point = 160552 THEN 'Nutrition program' 
+		 WHEN  ehe.entry_point = 5622 THEN 'Other'
+		 WHEN  ehe.entry_point = 160564 THEN 'Vaccination service'
+		 WHEN  ehe.entry_point = 160359 THEN 'Private home-based care'
+		 WHEN  ehe.entry_point = 159937 THEN 'Maternal and child health program' 
+		 WHEN  ehe.entry_point = 162223 THEN 'Voluntary male circumcision clinic' 
+		 WHEN  ehe.entry_point = 162050 THEN 'Comprehensive Care Unit' 
+		 ELSE  'Missing'
+		 END AS 'EntryPoint',
+	 eme.parity,
+	 CASE
+	    WHEN eme.hiv_status = 703 THEN 'Positive'
+	    WHEN eme.hiv_status = 664 THEN 'Negative'
+	    WHEN eme.hiv_status = 1067 THEN 'Unknown'
+	    end as hiv_status,
+	 CASE 
+	    WHEN eme.partner_hiv_status=703 THEN 'Positive'
+	    WHEN eme.partner_hiv_status=664 THEN 'Negative'
+	    WHEN eme.partner_hiv_status=1067 THEN 'Unknown'
+	    end as partner_hiv_status, 
+	 CASE
+       WHEN SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(ele.lab_test in ('856','1305'),ele.test_result,null) ORDER BY ele.date_created SEPARATOR '|') 
+,'|',-2),'|',-1)='1302' THEN 'LDL'
+       ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(ele.lab_test in ('856','1305'),ele.test_result,null) ORDER BY ele.date_created SEPARATOR '|') 
+,'|',-2),'|',-1) 
+     END AS recent_vl_result,
+     emav.anc_visit_number, 
+	 ecic.latest_vis_date,
+	 CASE 
+	    WHEN ecic.started_on_drugs is not null THEN 'Active'
+	    WHEN mid(max(concat(eppd.visit_date,eppd.discontinuation_reason)),11)=159492 THEN 'Transfer out'
+        WHEN mid(max(concat(eppd.visit_date,eppd.discontinuation_reason)),11)=5240 THEN 'Lost to followup'
+        WHEN mid(max(concat(eppd.visit_date,eppd.discontinuation_reason)),11)=160034 THEN 'Died'
+        ELSE 'Others'
+        END AS 'ArtStatus',
+      CASE
+        WHEN mid(max(concat(ephf.visit_date, ephf.nutritional_status)),11) = 1115 THEN 'Normal'
+        WHEN mid(max(concat(ephf.visit_date, ephf.nutritional_status)),11) = 114413 THEN 'Acute Malnutrition'
+        WHEN mid(max(concat(ephf.visit_date, ephf.nutritional_status)),11) = 163303 THEN 'Moderate Acute Malnutrition'
+        ELSE 'Other'
+        END as nutritional_status,
+      CASE 
+        WHEN mid(max(concat(ephf.visit_date, ephf.tb_status)),11)= 1663 THEN 'Completed TB Rx'
+         WHEN mid(max(concat(ephf.visit_date, ephf.tb_status)),11)= 142177 THEN 'TB Suspected'
+          WHEN mid(max(concat(ephf.visit_date, ephf.tb_status)),11)= 1661 THEN 'Disease diagnosed'
+           WHEN mid(max(concat(ephf.visit_date, ephf.tb_status)),11)= 1660 THEN 'No TB sign'
+            WHEN mid(max(concat(ephf.visit_date, ephf.tb_status)),11)= 1662 THEN 'On TB Rx'
+            WHEN mid(max(concat(ephf.visit_date, ephf.tb_status)),11)= 160737 THEN 'Not Assessed of TB'
+        END as tb_status,
+       CASE 
+         WHEN egs.ipv = 1066 THEN 'No'
+         WHEN egs.ipv = 1065 THEN 'Yes'
+         END AS gbv_history
+FROM kenyaemr_etl.etl_mch_enrollment eme 
+left join kenyaemr_etl.etl_patient_demographics epd ON eme.patient_id = epd.patient_id
+left join kenyaemr_etl.etl_patient_program_discontinuation eppd on eme.patient_id = eppd.patient_id 
+left join kenyaemr_etl.etl_current_in_care ecic on eme.patient_id = ecic.patient_id 
+left join kenyaemr_etl.etl_patient_hiv_followup ephf on eme.patient_id = ephf.patient_id 
+left join kenyaemr_etl.etl_laboratory_extract ele on eme.patient_id  = ele.patient_id 
+left join kenyaemr_etl.etl_mch_antenatal_visit emav  on eme.patient_id  = emav.patient_id 
+left join kenyaemr_etl.etl_gbv_screening egs on eme.patient_id  =  egs.patient_id 
+left join kenyaemr_etl.etl_hiv_enrollment ehe on eme.patient_id = ehe.patient_id 
+group by eme.patient_id 

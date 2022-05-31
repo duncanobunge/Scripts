@@ -1,0 +1,104 @@
+-- This query pulls all patients who acquired LTFU status within a given period of time
+-- It takes in 2 parameters, i.e :startDate and :endDate. Replace them before running this query
+-- e.g. If i want a list of all clients who acquired LTFU status in Jan to Mar 2020, i will replace as below 
+
+-- :startDate will be replaced with '2020-01-01' 
+-- :endDate will be replaced with '2020-03-31' 
+
+use openmrs;
+
+SET @StartDate='2021-11-01';
+SET @EndDate='2021-11-30';
+
+SET @cnt=0;
+SET @cnt2=0;
+
+SELECT  
+dt3_encounter_id as EncounterID,
+dt3_patient_id as PatientID,
+MAX(IF(pit.name in('Patient Clinic Number'),pi.identifier,null)) AS Clinical_Number,
+MAX(IF(pit.name in('Unique Patient Number'),pi.identifier,null)) AS UPN,
+CONCAT_WS(" ",pn.given_name,pn.middle_name,pn.family_name) AS Patient_Name,
+p.gender AS Gender,
+p.birthdate AS Date_of_Birth, 
+DATEDIFF(DATE(DATE_ADD(dt3_Initial_TCA, interval 31 day)),p.birthdate) DIV 365.25 AS Age_at_LTFU,
+dt3_EncounterDate as EncounterDate,
+dt3_Initial_TCA AS TCA,
+DATE_ADD(dt3_Initial_TCA, interval 31 day) AS Expected_LTFU_Date,
+DATE_SUB(Expected_LTFU_Date,INTERVAL WEEKDAY(Expected_LTFU_Date) DAY) as Week_Start_Date,
+DATE_ADD(DATE_SUB(Expected_LTFU_Date,INTERVAL WEEKDAY(Expected_LTFU_Date) DAY), INTERVAL 6 DAY)  AS Week_End_Date,
+CONCAT(YEAR(DATE_ADD(dt3_Initial_TCA, interval 31 day)),'_',MONTHNAME(DATE_ADD(dt3_Initial_TCA, interval 31 day))) AS LTFU_Year_Month,
+IF(dt3_patient_id=dt4_patient_id,dt4_EncounterDate,null) AS Date_Returned_to_Care,
+DATEDIFF(IF(dt3_patient_id=dt4_patient_id,dt4_EncounterDate,null),dt3_Initial_TCA) Days_taken_to_Return_to_Care
+ FROM 
+ patient_identifier pi 
+ INNER JOIN patient_identifier_type pit ON pi.identifier_type=pit.patient_identifier_type_id AND pit.retired=0 and pi.voided=0 
+ INNER JOIN  person_name pn ON pi.patient_id=pn.person_id and pn.voided=0 
+ INNER JOIN  person p ON pi.patient_id=p.person_id and p.voided=0 
+INNER JOIN (SELECT * FROM(SELECT (@cnt := @cnt + 1) AS dt4_rowNumber,encounter_id AS dt4_encounter_id,patient_id AS dt4_patient_id,EncounterDate AS dt4_EncounterDate,Initial_TCA  AS dt4_Initial_TCA 
+FROM(
+SELECT e.encounter_id,e.patient_id, DATE(e.encounter_datetime) as EncounterDate, DATE(o.value_datetime)  AS Initial_TCA  
+ FROM encounter e 
+ INNER JOIN encounter_type et ON e.encounter_type=et.encounter_type_id 
+ AND et.name IN('HIV Enrollment','HIV Consultation','ART Refill') 
+and et.retired=0 
+INNER JOIN obs o ON e.encounter_id=o.encounter_id and o.voided=0 and e.voided=0 
+-- 1582,1938,5096,7469
+and o.concept_id in (5096,162549) and DATE(o.value_datetime)>=DATE_SUB(@StartDate,INTERVAL 30 DAY) -- and DATE_SUB(@EndDate,INTERVAL 30 DAY) 
+group by e.encounter_id 
+order by e.patient_id,EncounterDate) AS dt1) AS dt4 
+
+Right OUTER JOIN 
+(
+SELECT (@cnt2 := @cnt2 + 1) AS dt3_rowNumber,encounter_id AS dt3_encounter_id,patient_id AS dt3_patient_id,EncounterDate AS dt3_EncounterDate,Initial_TCA AS dt3_Initial_TCA,
+DATE_ADD(Initial_TCA, interval 30 day) as Expected_LTFU_Date  
+FROM(
+SELECT e.encounter_id,e.patient_id, DATE(e.encounter_datetime) as EncounterDate, DATE(o.value_datetime)  AS Initial_TCA  
+ FROM encounter e 
+ INNER JOIN encounter_type et ON e.encounter_type=et.encounter_type_id 
+ AND et.name IN('HIV Enrollment','HIV Consultation','ART Refill') 
+and et.retired=0
+INNER JOIN obs o ON e.encounter_id=o.encounter_id and o.voided=0 and e.voided=0 
+-- 1582,1938,5096,7469 
+and o.concept_id in (5096,162549) and DATE(o.value_datetime)>= DATE_SUB(@StartDate,INTERVAL 30 DAY) -- and DATE_SUB(@EndDate,INTERVAL 30 DAY) 
+group by e.encounter_id 
+order by e.patient_id,EncounterDate) as dt2) as dt3
+
+ON dt4.dt4_rowNumber=dt3.dt3_rowNumber+1) dat ON pi.patient_id=dat.dt3_patient_id AND pi.voided=0 
+WHERE pi.patient_id NOT IN (
+  -- If the patient is dead remove him/her from the list  
+SELECT DISTINCT(o.person_id) AS patient_id 
+FROM obs o
+JOIN 
+encounter e ON o.encounter_id=e.encounter_id AND DATE(e.encounter_datetime)<=DATE(@EndDate) and e.voided=0 and o.voided=0
+AND o.concept_id IN (1543) 
+ AND DATE(o.value_datetime) IS NOT NULL 
+)
+AND pi.patient_id NOT IN(
+SELECT DISTINCT(p.person_id) as patient_id FROM person p where p.dead=1 AND DATE(death_date)<=DATE(@EndDate) 
+and p.voided=0 
+)
+
+ AND pi.patient_id NOT IN( -- Remove Discontinued patients
+ -- EXCLUDE ALL TRANSFER OUTS        
+SELECT patient_id 
+FROM(SELECT DISTINCT(e.patient_id) AS patient_id,
+DATE(o.value_datetime) AS Date_TO,
+MAX(Date(e.encounter_datetime)) AS LastEncounter,
+All_LastEncounter
+FROM obs o
+INNER JOIN 
+encounter e ON o.encounter_id=e.encounter_id AND DATE(e.encounter_datetime)<=DATE(@EndDate) and e.voided=0 and o.voided=0
+AND o.concept_id IN (160649,159495,161555) 
+INNER JOIN encounter_type et ON e.encounter_type=et.encounter_type_id AND et.name in('HIV Discontinuation')
+INNER JOIN (
+SELECT e.patient_id AS patient_id,MAX(DATE(e.encounter_datetime)) AS All_LastEncounter 
+FROM encounter e 
+WHERE DATE(e.encounter_datetime) <= DATE(@EndDate) and e.voided=0
+GROUP BY patient_id
+) AS enc ON e.patient_id=enc.patient_id
+ group by patient_id 
+HAVING LastEncounter>=All_LastEncounter) AS TOs
+) 
+GROUP BY PatientID,EncounterDate 
+ HAVING UPN IS NOT NULL  AND (Date_Returned_to_Care IS NULL OR DATEDIFF(Date_Returned_to_Care,TCA)>30) AND Expected_LTFU_Date BETWEEN @StartDate AND @EndDate

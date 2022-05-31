@@ -1,0 +1,7 @@
+use kenyaemr_etl;
+show tables;
+SELECT 
+  ecic.patient_id,
+  epd.unique_patient_no
+  FROM  etl_current_in_care ecic
+  INNER JOIN etl_patient_demographics epd  ON ecic .patient_id =epd.patient_id 

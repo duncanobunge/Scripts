@@ -1,0 +1,71 @@
+-- this scripts pulls all the active clients as at end of the immediate reported month
+-- from the linelist, use systematic sampling to generate your sample size for RDQA activities.
+-- paste your sample size line-list on the EMR sheet on the RDQA tool.
+-- On the Greencard sheet proceed with the manual entry from the paper greencard.
+-- Finally check on your on the Scores sheets
+use kenyaemr_etl;
+select
+  cc.patient_id,
+  de.unique_patient_no as 'CCC_Number',
+  concat( de.given_name,' ',de.family_name) as client_name,
+  CASE
+  WHEN  cc.Gender ='F' THEN 'Female'
+  WHEN  cc.Gender ='M' THEN 'Male' 
+  ELSE 'Missing'
+  END as 'Sex',
+  DATE_FORMAT(FROM_DAYS(DATEDIFF(max(cc.latest_vis_date),cc.dob)),'%Y')+0 as Age_at_last_visit, 
+  date_format(ee.date_confirmed_hiv_positive,'%d/%m/%Y') as 'Date Confirmed HIV Positive',
+  date_format(cc.enroll_date,'%d/%m/%Y') as 'Date Enrolled in HIV Care (dd/mm/yyyy)',
+  date_format(min(dr.date_started),'%d/%m/%Y') as 'Date of ART initiation (dd/mm/yyyy)',
+  le.recent_vl_result AS 'Recent Viral load Result',
+  le.recent_vl_result_date AS 'Most Recent Viral load date (dd/mm/yyyy)',
+  mid(max(concat(dr.date_started, dr.regimen_name)), 11) as 'Current ART regimen',
+  CASE
+      WHEN mid(max(concat(cc.latest_vis_date,fup.cacx_screening)),11) IN (1118) THEN 'Not Done'
+      WHEN mid(max(concat(cc.latest_vis_date,fup.cacx_screening)),11) IN (1175) THEN 'N/A'
+      WHEN mid(max(concat(cc.latest_vis_date,fup.cacx_screening)),11) IN (664) THEN 'Negative'
+      WHEN mid(max(concat(cc.latest_vis_date,fup.cacx_screening)),11) IN (703) THEN 'Positive'
+      end as Cacx_screening_result_at_last_visit,
+  CASE
+    WHEN mid(max(concat(cc.latest_vis_date,fup.cacx_screening)),11) IN (1118) THEN 'Yes'
+    WHEN mid(max(concat(cc.latest_vis_date,fup.cacx_screening)),11) IN (1175) THEN 'No'
+	WHEN mid(max(concat(cc.latest_vis_date,fup.cacx_screening)),11) IN (664) THEN 'No'
+	WHEN mid(max(concat(cc.latest_vis_date,fup.cacx_screening)),11) IN (703) THEN 'No'
+    ELSE 'Yes'
+  end as 'Eligible for CaCx',
+  '' as 'referrals',
+  date_format(cc.latest_vis_date,'%d/%m/%Y') as 'Date screened using VIA/VILI (dd/mm/yyyy)',
+  date_format(cc.latest_tca,'%d/%m/%Y') as 'Next appointment date (dd/mm/yyyy)'
+
+from kenyaemr_etl.etl_current_in_care cc
+inner join kenyaemr_etl.etl_drug_event dr ON cc.patient_id = dr.patient_id
+inner join kenyaemr_etl.etl_patient_hiv_followup fup on cc.patient_id= fup.patient_id
+inner join kenyaemr_etl.etl_patient_demographics de on cc.patient_id = de.patient_id
+inner join kenyaemr_etl.etl_hiv_enrollment ee on cc.patient_id = ee.patient_id
+left outer join kenyaemr_etl.etl_ipt_outcome on cc.patient_id =  kenyaemr_etl.etl_ipt_outcome.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_ipt_initiation ON cc.patient_id = kenyaemr_etl.etl_ipt_initiation.patient_id
+LEFT OUTER JOIN (
+select
+le.patient_id,
+SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
+,'|',-2) AS VL_SEQ,
+CASE
+ WHEN SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
+,'|',-2),'|',1)='1302' THEN 'LDL'
+ ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
+,'|',-2),'|',1) 
+END AS second_last_vl_result,
+Date_format(SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.date_created,null) ORDER BY le.date_created SEPARATOR '|') 
+,'|',-2),'|',1),'%d/%m/%Y') AS second_last_vl_date,
+CASE
+ WHEN SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
+,'|',-2),'|',-1)='1302' THEN 'LDL'
+ ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
+,'|',-2),'|',-1) 
+END AS recent_vl_result,
+Date_format(SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.date_created,null) ORDER BY le.date_created SEPARATOR '|') 
+,'|',-2),'|',-1),'%d/%m/%Y') AS recent_vl_result_date
+from kenyaemr_etl.etl_laboratory_extract le
+group by le.patient_id ) as le ON cc.patient_id=le.patient_id
+group by patient_id
+having Sex IN ('Female') and Age_at_last_visit BETWEEN 15 AND 49 

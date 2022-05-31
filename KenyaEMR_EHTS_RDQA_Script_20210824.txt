@@ -1,0 +1,113 @@
+-- the script is modified to remove the positive clients duplicate records..
+
+use kenyaemr_etl; -- set the kenyaemr_etl db as the targeted db
+Set @startdate='2020-10-01'; -- replace with the startdate of interest
+Set @enddate='2021-03-31';  -- replace with the enddate of interest
+SELECT
+	@n := @n + 1 serialnumber,
+    ed.FacilityName,
+	etl_hts_test.patient_id as 'HTS Serial No',
+	date_format(etl_hts_test.visit_date,'%d/%m/%Y')as 'HIV Test Date',
+	date_format(etl_patient_demographics.DOB,'%d/%m/%Y')as 'Date of Birth',
+	DATEDIFF(DATE(etl_hts_test.visit_date),etl_patient_demographics.DOB) div 365.25 as Age,
+	etl_patient_demographics.Gender as Sex,
+	CASE
+	  WHEN etl_patient_demographics.marital_status IN ('Never married') THEN 'S'
+	  WHEN etl_patient_demographics.marital_status IN ('Divorced') THEN 'D'
+	  WHEN etl_patient_demographics.marital_status IN ('Widowed') THEN 'W'
+	  WHEN etl_patient_demographics.marital_status IN ('Married') THEN 'MM'
+	  ELSE 'Missing'
+	  END AS 'Marital status',
+	CASE 
+	  WHEN etl_hts_test.key_population_type IN ('Female sex worker') THEN 'SW'
+	  WHEN etl_hts_test.key_population_type IN ('Men who have sex with men') THEN 'MSM'
+	  WHEN etl_hts_test.key_population_type IN ('Injectable drug user') THEN 'IDU'
+	  ELSE 'Missing'
+	  END as 'Key Population',
+	CASE  WHEN etl_hts_test.ever_tested_for_hiv IN ('Yes') THEN 'Y' 
+	      WHEN etl_hts_test.ever_tested_for_hiv IN ('No') THEN 'N'
+	      ELSE 'Missing'  
+	      END as 'Ever Tested',
+	etl_hts_test.months_since_last_test as 'Re-Testing Months',
+	CASE  
+	    WHEN  etl_hts_test.patient_had_hiv_self_test IN ('No') THEN 'N'
+	    WHEN  etl_hts_test.patient_had_hiv_self_test IN ('Yes') THEN 'Y'
+	    ELSE 'Missing'  
+	    END as 'Ever had HIV self test this year?',
+	-- etl_hts_test.patient_disabled as disability,
+	etl_hts_test.disability_type as Disability,
+	CASE 
+	   WHEN etl_hts_test.patient_consented IN ('Yes') THEN 'Y' 
+	   WHEN etl_hts_test.patient_consented IN ('No') THEN 'N'
+       ELSE 'Missing'
+       END as Consent,
+	CASE 
+	   WHEN etl_hts_test.client_tested_as IN ('Individual') THEN 'I'
+	   WHEN etl_hts_test.client_tested_as IN ('Couple') THEN 'C'
+	   ELSE 'Missing'
+	   END as 'Client tested as',
+	CASE 
+	   WHEN etl_hts_test.test_strategy IN ('VI:Integrated VCT Center') THEN 'VI'
+	   WHEN etl_hts_test.test_strategy IN ('MO:Mobile Outreach HTS') THEN 'MO'
+	   WHEN etl_hts_test.test_strategy IN ('Index testing') THEN 'PNS'
+	   WHEN etl_hts_test.test_strategy IN ('HP:Provider Initiated Testing(PITC)') THEN 'HP'
+	   WHEN etl_hts_test.test_strategy IN ('Home Based Testing') THEN 'HB'
+	   WHEN etl_hts_test.test_strategy IN ('NP:HTS for non-patients') THEN 'NP'
+	   WHEN etl_hts_test.test_strategy IN ('Other') THEN 'O'
+	   WHEN etl_hts_test.test_strategy IN ('Stand Alone VCT Center') THEN 'VS'
+	   ELSE 'Missing'
+	   END as Strategy,
+	CASE 
+	  WHEN etl_hts_test.test_1_result IN ('Negative') THEN 'N'
+	  WHEN etl_hts_test.test_1_result IN ('Positive') THEN 'P'
+	  WHEN etl_hts_test.test_1_result IN ('Invalid') THEN 'I'
+	  ELSE 'Missing'
+	  END as 'HIV Test 1',
+	CASE 
+	  WHEN etl_hts_test.test_2_result IN ('Negative') THEN 'N' 
+	  WHEN etl_hts_test.test_2_result IN ('Positive') THEN 'P' 
+	  WHEN etl_hts_test.test_2_result IN ('Invalid') THEN 'I' 
+	  WHEN etl_hts_test.test_1_result IN ('Negative') THEN 'NA'
+	  ELSE 'Missing'
+	  END as 'HIV Test 2',
+	CASE 
+	  WHEN etl_hts_test.final_test_result IN ('Negative') THEN 'N' 
+	  WHEN etl_hts_test.final_test_result IN ('Positive') THEN 'P' 
+	  WHEN etl_hts_test.final_test_result IN ('Inconclusive') THEN 'IC' 
+	  ELSE 'Missing'
+	  END as 'Final Result',
+	CASE 
+	  WHEN etl_hts_test.patient_given_result IN ('Yes') THEN 'Y' 
+	  WHEN etl_hts_test.patient_given_result IN ('No') THEN 'N' 
+	  ELSE 'Missing'
+	  END as 'Final Result Given',
+	CASE 
+	   WHEN etl_hts_test.couple_discordant IN ('Yes') THEN 'Y'
+	   WHEN etl_hts_test.couple_discordant IN ('No') THEN 'N'
+	   WHEN etl_hts_test.client_tested_as IN ('Individual') THEN 'NA'
+	   ELSE 'Missing'
+	   END as 'Couple Discordant',
+	CASE 
+	   WHEN etl_hts_test.tb_screening IN ('No TB signs') THEN 'NS'
+	   WHEN etl_hts_test.tb_screening IN ('On TB Treatment') THEN 'TBRx'
+	   WHEN etl_hts_test.tb_screening IN ('Presumed TB') THEN 'PrTB'
+	   ELSE 'Missing'
+	   END as 'TB Screening',
+	CASE 
+	   WHEN etl_hts_test.test_1_result IN ('Negative') THEN 'NA'
+	   WHEN etl_hts_referral_and_linkage.ccc_number IS NOT NULL THEN 'Yes'
+	   WHEN etl_hts_test.test_2_result IN ('Positive') AND etl_hts_referral_and_linkage.ccc_number IS NULL THEN 'No'
+	   ELSE 'Missing'
+	   END AS 'Linked to Care',
+	etl_hts_referral_and_linkage.ccc_number as 'CCC Number',
+   'Assesed for HIV Risk',
+   'Eligible for Further PrEP Assessment'
+FROM etl_hts_test
+        INNER JOIN etl_patient_demographics ON etl_patient_demographics.patient_id = etl_hts_test.patient_id
+        INNER JOIN openmrs.users us on kenyaemr_etl.etl_hts_test.creator = us.user_id
+	    LEFT JOIN etl_hts_referral_and_linkage ON etl_hts_test.patient_id = etl_hts_referral_and_linkage.patient_id,(SELECT @n := 0) m,
+        etl_default_facility_info ed
+        WHERE etl_hts_test.visit_date BETWEEN date(@startdate) AND date(@enddate) 
+		group by etl_hts_test.patient_id,etl_hts_test.visit_date
+        order by  etl_hts_test.patient_id-- serialnumber
+        

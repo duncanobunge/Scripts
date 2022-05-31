@@ -1,0 +1,276 @@
+Use openmrs;
+SET @endDate='2020-07-31';  -- replace the date with the correct date of interest
+
+SELECT 
+	DISTINCT(e.patient_id) AS PatientId,
+	UPN AS UniquePatientNumber,
+    fa.FacilityName,
+	Gender,
+	Date_of_Birth AS DOB,
+    dm.marital_status as MaritalStatus,
+	MAX(IF(o.concept_id IN(160540) AND locale_preferred=1 AND cn.name is not null and cn.locale IN('en'),cn.name,NULL)) AS PatientSource,
+	MIN(IF(o.concept_id IN(160554),DATE(o.value_datetime),null)) AS DateConfirmedHIVPositive,
+	COALESCE(MIN(IF(o.concept_id IN(160555),DATE(o.value_datetime),null)),MIN(DATE(e.encounter_datetime))) AS DateEnrolledHIVCare,
+        CASE 
+		WHEN wh.bWHO IN (1204) THEN  'WHO STAGE 1 ADULT'
+		WHEN wh.bWHO IN (1205) THEN  'WHO STAGE 2 ADULT'
+		WHEN wh.bWHO IN (1206) THEN  'WHO STAGE 3 ADULT'
+		WHEN wh.bWHO IN (1207) THEN  'WHO STAGE 4 ADULT'
+		WHEN wh.bWHO IN (1220) THEN  'WHO STAGE 1 PEDS'
+		WHEN wh.bWHO IN (1221) THEN  'WHO STAGE 2 PEDS'
+		WHEN wh.bWHO IN (1222) THEN  'WHO STAGE 3 PEDS'
+		WHEN wh.bWHO IN (1223) THEN  'WHO STAGE 4 PEDS'
+		WHEN wh.bWHO IN (1067) THEN  'UNKNOWN'
+		END AS bWHOStage,
+    SUBSTRING_INDEX(GROUP_CONCAT(IF(o.concept_id IN(164855,1193,1088,1085),date(e.encounter_datetime),null) ORDER BY e.encounter_datetime SEPARATOR '|'),'|',1) AS StartARTDate,
+	dm.StartRegimenLine,
+	SUBSTRING_INDEX(GROUP_CONCAT(IF(o.concept_id IN(164855,1193,1088,1085),cn.name,null) ORDER BY e.encounter_datetime SEPARATOR '|'),'|',1) AS InitialRegimen,
+        vlr.LastVLDate,
+        CASE WHEN TBResult IN ('Missing') THEN 'Missing' ELSE 'YES' END AS 'TB Screening at LastVisit',
+        CASE 
+		   WHEN TBResult IN (1663) THEN 'TB RX Completed'
+		   WHEN TBResult IN (142177) THEN 'Pr TB'
+		   WHEN TBResult IN (1661) THEN 'TB Diagnosed'
+		   WHEN TBResult IN (1660) THEN 'No TB'
+		   WHEN TBResult IN (1662) THEN 'TB Rx'
+		   WHEN TBResult IN (160737) THEN 'Not Done'
+		   ELSE 'Missing'
+		   END AS 'TBScreeningOutcome',
+        ipt.iptstartdate as IPTStartdate,
+        CASE 
+		   WHEN ipt.iptstatus IN (112141) THEN 'DISCONTINUED'
+		   WHEN ipt.iptstatus IN (1267) THEN 'Completed'
+		   ELSE 'Missing'
+		   END As IPTCompletionstatus,
+	ipt.iptoutcomedate as IPTCompletiondate,
+    dm.currentRegimenLine as LastRegimenLine,
+	SUBSTRING_INDEX(GROUP_CONCAT(IF(o.concept_id IN(164855,1193,1088,1085),date(e.encounter_datetime),null) ORDER BY e.encounter_datetime SEPARATOR '|'),'|',-1) AS CurrentRegimenDate,
+	SUBSTRING_INDEX(GROUP_CONCAT(IF(o.concept_id IN(164855,1193,1088,1085),cn.name,null) ORDER BY e.encounter_datetime SEPARATOR '|'),'|',-1) AS CurrentRegimen,
+	Last_Encounter AS LastARTDate,
+	Next_TCA AS NextAppointmentDate,
+    CASE 
+      WHEN  ds.discontinuation_reason = 159492 THEN 'Transferred out'
+      WHEN  ds.discontinuation_reason = 5240 THEN 'Lost to followup'
+      WHEN  ds.discontinuation_reason IN (159,160034) THEN 'Dead'
+      WHEN  ds.discontinuation_reason = 5622 THEN 'Others'
+      ELSE 'Missing'
+      END as 'LastStatus'
+FROM encounter e 
+INNER JOIN (
+	SELECT 
+	e.patient_id as patient_id,
+	MAX(DATE(e.encounter_datetime)) AS Last_Encounter,
+	SUBSTRING_INDEX(GROUP_CONCAT(IF(o.concept_id IN(5096),DATE(o.value_datetime),null) ORDER BY e.encounter_datetime SEPARATOR '|'),'|',-1) AS Next_TCA,
+	MAX(DATE(IF(o.concept_id in(162549),e.encounter_datetime,null))) AS l_enc3,
+	MAX(DATE(IF(o.concept_id in(5096),e.encounter_datetime,null))) AS l_enc6,
+	SUBSTRING_INDEX(GROUP_CONCAT(IF(o.concept_id IN(162549),DATE(o.value_datetime),null) ORDER BY e.encounter_datetime SEPARATOR '|'),'|',-1) AS Next_TCA_3 
+	FROM obs o 
+	JOIN encounter e ON o.encounter_id=e.encounter_id 
+	AND o.voided=0 and e.voided=0 and o.concept_id in(5096) 
+	AND DATE(e.encounter_datetime) <= DATE(@endDate) 
+	JOIN encounter_type et ON e.encounter_type=et.encounter_type_id 
+	 AND et.name IN('HIV Enrollment','HIV Consultation','ART Refill') 
+	and et.retired=0
+	group by patient_id 
+	)lv ON e.patient_id=lv.patient_id 
+
+INNER JOIN 
+obs o ON o.encounter_id=e.encounter_id AND DATE(e.encounter_datetime)<=DATE(@endDate) and o.voided=0 and e.voided=0 
+AND o.concept_id IN (159599,160555,160554,164855,1193,1088,1085,160540,856,5497,5090) 
+INNER JOIN (
+SELECT 
+pi.patient_id AS patient_id,
+MAX(IF(pit.name in('Unique Patient Number'),pi.identifier,null)) AS UPN,
+MAX(IF(pit.name in('Patient Clinic Number'),pi.identifier,null)) AS Clinical_Number,
+MAX(IF(pit.name in('HEI ID Number'),pi.identifier,null)) AS HEI_No,
+ p.gender AS Gender,
+ DATE(p.birthdate) as Date_of_Birth,
+ DATEDIFF(DATE(@endDate),p.birthdate) div 365.25 as Age,
+ CONCAT_WS(' ',pn.given_name,pn.middle_name,pn.family_name) AS Patient_Name,
+l.county_district AS County,
+l.address6 AS Sub_County,
+l.name AS Health_Facility,
+la.value_reference AS MFLCode
+
+FROM patient_identifier pi 
+INNER JOIN patient_identifier_type pit ON pi.identifier_type=pit.patient_identifier_type_id AND pit.retired=0 and pi.voided=0 
+INNER JOIN person p ON pi.patient_id=p.person_id AND p.voided=0
+INNER JOIN person_name pn ON pi.patient_id=pn.person_id  AND pn.voided=0 
+LEFT OUTER JOIN location l ON l.location_id=pi.location_id AND l.retired=0
+LEFT OUTER JOIN location_attribute la ON l.location_id=la.location_id  AND la.voided=0 
+
+GROUP BY patient_id 
+ HAVING 
+ UPN IS NOT NULL -- and 
+--  Clinical_Number in (06823,13991,00649,09872)
+) pi ON e.patient_id=pi.patient_id 
+LEFT JOIN (select
+o.person_id,
+if(max(date(e.encounter_datetime)) and o.concept_id in (1659),o.value_coded, null) as TBResult
+from obs o 
+inner join encounter e ON o.person_id = e.patient_id
+where concept_id IN (1659)
+group by o.person_id
+) as vl ON e.patient_id = vl.person_id
+LEFT JOIN(
+select
+ o.person_id,
+ if(max(e.encounter_datetime),o.value_coded, null) as cWHO,
+ if(min(e.encounter_datetime),o.value_coded, null) as bWHO
+from obs o 
+inner join encounter e on o.person_id = e.patient_id
+where concept_id in (5356)
+group by o.person_id
+)as wh ON e.patient_id = wh.person_id
+LEFT JOIN (select
+o.person_id,
+if(max(date(e.encounter_datetime)) and o.concept_id in (5497),o.value_numeric, null) as CD4Count,
+if(max(date(e.encounter_datetime)) and o.concept_id in (5497),date(e.encounter_datetime), null) as CD4CountDate
+from obs o 
+inner join encounter e ON o.person_id = e.patient_id
+where concept_id IN (5497)
+group by o.person_id
+) as cd ON e.patient_id = cd.person_id
+LEFT OUTER  JOIN(select
+o.person_id,
+h.Height,
+if(o.concept_id=5089 and max(date(e.encounter_datetime)),o.value_numeric, null) as Weight,
+round(if(o.concept_id=5089 and max(date(e.encounter_datetime)),o.value_numeric, null) / ((h.Height*0.01)*(h.Height*0.01)),2) as BMI
+from obs o
+INNER join encounter e ON o.person_id = e.patient_id 
+INNER join (
+  select
+o.person_id,
+if(o.concept_id=5090 and max(date(e.encounter_datetime)),o.value_numeric, null) as Height
+from obs o
+inner join encounter e ON o.person_id = e.patient_id
+where o.concept_id in (5090)
+group by o.person_id
+) as h ON o.person_id = h.person_id
+where o.concept_id in (5089)
+group by o.person_id
+)as bm ON e.patient_id = bm.person_id
+LEFT OUTER JOIN(
+  select
+o.person_id,
+s.systollic,
+if(o.concept_id=5086 and max(date(e.encounter_datetime)),o.value_numeric, null) as diastollic,
+group_concat(concat_ws('/',s.systollic, if(o.concept_id=5086,o.value_numeric, null))order by e.encounter_datetime SEPARATOR '|' ) as BP
+from obs o
+INNER join encounter e ON o.person_id = e.patient_id 
+INNER join(
+  select
+        o.person_id,
+        if(o.concept_id=5085 and max(date(e.encounter_datetime)),o.value_numeric, null) as systollic
+  from obs o
+  inner join encounter e ON o.person_id = e.patient_id
+  where o.concept_id in (5085)
+  group by o.person_id) as s ON o.person_id = s.person_id
+where o.concept_id in (5086)
+group by o.person_id
+)as bp ON e.patient_id = bp.person_id
+LEFT OUTER JOIN(
+select
+   o.person_id,
+   SUBSTRING_INDEX(GROUP_CONCAT(IF(o.concept_id=856,date(o.obs_datetime),null) ORDER BY e.encounter_datetime SEPARATOR '|'),'|',-1) AS LastVLDate,
+from obs o 
+inner join encounter e on o.person_id = e.patient_id
+where concept_id in (856)
+group by o.person_id) as vlr ON e.patient_id = vlr.person_id
+LEFT OUTER JOIN(
+select
+o.person_id,
+if(o.concept_id =374,o.value_coded,null)fpmethod
+from obs o 
+inner join encounter e on o.person_id = e.patient_id
+where o.concept_id in (374)
+group by o.person_id
+)as fp ON e.patient_id = fp.person_id
+LEFT OUTER JOIN(
+   select
+o.person_id,
+if(o.concept_id=5272,o.value_coded, null) as pgstatus
+from obs o 
+inner join encounter e on o.person_id = e.patient_id
+where o.concept_id in (5272)
+group by o.person_id
+)as pg ON e.patient_id = pg.person_id
+LEFT OUTER join(
+ select
+o.person_id,
+if(o.concept_id=164933,o.value_coded, null) as PgIntention
+from obs o 
+inner join encounter e on o.person_id = e.patient_id
+where o.concept_id in (164933)
+group by o.person_id
+)as pgi ON e.patient_id = pgi.person_id
+LEFT OUTER JOIN(
+  select
+o.person_id,
+if(o.concept_id=160653,o.value_coded, null) as fpstatus
+from obs o 
+inner join encounter e on o.person_id = e.patient_id
+where o.concept_id in (160653)
+group by o.person_id
+)as fpp ON e.patient_id = fpp.person_id
+LEFT OUTER JOIN(SELECT
+
+	kenyaemr_etl.etl_ipt_initiation.patient_id,
+    max(kenyaemr_etl.etl_ipt_initiation.visit_date) as iptstartdate,
+    kenyaemr_etl.etl_ipt_outcome.outcome as iptstatus,
+	kenyaemr_etl.etl_ipt_outcome.visit_date as iptoutcomedate
+	
+FROM
+	kenyaemr_etl.etl_ipt_initiation
+	LEFT OUTER JOIN kenyaemr_etl.etl_ipt_outcome 
+	ON kenyaemr_etl.etl_ipt_initiation.patient_id=kenyaemr_etl.etl_ipt_outcome.patient_id
+	group by kenyaemr_etl.etl_ipt_initiation.patient_id
+)as ipt ON e.patient_id = ipt.patient_id
+LEFT OUTER join( select
+ pd.patient_id,
+ pd.marital_status,
+ CASE
+   when he.patient_type IN (164144) THEN 'New client'
+   when he.patient_type IN (160563) THEN 'Transfer In'
+   when he.patient_type IN (164097) THEN 'Return to Care'
+   when he.patient_type IN (164931) THEN 'Transit Patient'
+   ELSE 'Missing'
+   END AS  'PatientType',
+ min(d.date_started) as StartARTDate,
+ if(min(d.date_started),min(d.regimen),null) as StartRegimen,
+ if(min(d.date_started),min(d.regimen_line),null) as StartRegimenLine,
+ max(d.date_started) as LastARTDate,
+ if(max(d.date_started),max(d.regimen),null) as currentRegimen,
+ if(max(d.date_started),max(d.regimen_line),null) as currentRegimenLine
+from kenyaemr_etl.etl_patient_demographics pd
+INNER JOIN kenyaemr_etl.etl_current_in_care c on pd.patient_id = c.patient_id
+INNER JOIN kenyaemr_etl.etl_drug_event d on pd.patient_id = d.patient_id
+INNER JOIN kenyaemr_etl.etl_hiv_enrollment he ON pd.patient_id = he.patient_id
+group by pd.patient_id) as dm ON e.patient_id = dm.patient_id
+LEFT OUTER JOIN
+(SELECT
+
+	ds.patient_id ,
+	date(ds.visit_date) as discontinuationdate,
+	ds.program_name,
+	ds.discontinuation_reason,
+	ds.date_died,
+	ds.transfer_facility,
+	ds.transfer_date
+FROM kenyaemr_etl.etl_patient_program_discontinuation as ds
+WHERE ds.program_name like '%HIV%'
+)as ds ON e.patient_id = ds.patient_id
+LEFT OUTER JOIN(
+select o.person_id as patient_id,
+SUBSTRING_INDEX(GROUP_CONCAT(cn.name ORDER BY e.encounter_datetime SEPARATOR '|'),'|',-1) AS Differenciated_Care_Model 
+ FROM obs o 
+ INNER JOIN encounter e ON o.encounter_id=e.encounter_id AND DATE(e.encounter_datetime)<=DATE(@endDate) and e.voided=0 and o.voided=0 
+ INNER JOIN concept_name cn ON o.value_coded=cn.concept_id and o.concept_id in(164947) AND cn.locale='en' and cn.locale_preferred=1 and cn.voided=0
+ group by patient_id
+) diff ON e.patient_id=diff.patient_id 
+LEFT OUTER JOIN concept_name cn ON o.value_coded=cn.concept_id AND cn.voided=0  AND cn.locale_preferred=1 and cn.locale='en',
+kenyaemr_etl.etl_default_facility_info as fa
+GROUP BY PatientId 
+HAVING Next_TCA IS NOT NULL -- AND Next_TCA>=DATE_SUB(DATE(@endDate),INTERVAL 30 DAY) 
+AND CurrentRegimen IS NOT NULL 
+

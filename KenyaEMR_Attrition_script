@@ -1,0 +1,83 @@
+set @endDate='2021-12-31';
+set @startDate='2021-12-01';
+select 
+								 d.patient_id, 
+                                 de.unique_patient_no,
+                                 de.DOB,
+                                 de.Gender,
+                                 de.marital_status,
+								 de.occupation,
+								 de.phone_number,
+								
+                                 CASE
+                                   when e.entry_point IN (160539) THEN 'VCT'
+                                   when e.entry_point IN (160538) THEN 'PMTCT'
+                                   when e.entry_point IN (160537) THEN 'Peads IPD'
+                                   when e.entry_point IN (160536) THEN 'Adult IPD'
+                                   when e.entry_point IN (160542) THEN 'OPD'
+                                   when e.entry_point IN (160541) THEN 'TB program'
+                                   when e.entry_point IN (160543) THEN 'CBO'
+                                   when e.entry_point IN (160544) THEN 'Under Five clinic'
+                                   when e.entry_point IN (160545) THEN 'Outreach'
+                                   when e.entry_point IN (160546) THEN 'STI clinic'
+                                   when e.entry_point IN (159937) THEN 'MCH'
+                                   when e.entry_point IN (162223) THEN 'VMMC'
+                                   ELSE 'Others'
+                                   END AS 'EntryPoint',
+                                   
+                                 CASE
+								   when e.patient_type IN (164144) THEN 'New client'
+								   when e.patient_type IN (160563) THEN 'Transfer In'
+								   when e.patient_type IN (164097) THEN 'Return to Care'
+								   when e.patient_type IN (164931) THEN 'Transit Patient'
+								   ELSE 'Missing'
+								   END AS  'PatientType',
+                                 min(e.visit_date) as DateEnrolledInHIVCare,
+								 e.date_confirmed_hiv_positive,
+								 max(fup.visit_date) as LastVisitDate,
+								 max(fup.next_appointment_date) as Next_TCA,
+                                 coalesce(date(d.effective_discontinuation_date),d.visit_date) as visit_date,
+                                 max(date(d.effective_discontinuation_date)) as effective_disc_date,
+                                 min(dr.date_started) as StartARTDate,
+                                 mid(min(concat(dr.date_started, dr.regimen_name)), 11)as StartARTRegimen,
+                                  le.recent_vl_result AS 'Recent Viral load Result',
+	                            le.recent_vl_result_date AS 'Most Recent Viral load date (dd/mm/yyyy)',
+                                 d.discontinuation_reason,
+								 CASE
+								   when d.discontinuation_reason in (159492) THEN 'Transfer out'
+								   when d.discontinuation_reason in (5240) THEN 'Lost to followup'
+                                   when d.discontinuation_reason in (1067) THEN 'Unknown'
+								   when d.discontinuation_reason in (160034) THEN 'Died'
+								   ELSE 'Others'
+                                   END AS 'ReasonForDiscontinuation'
+from kenyaemr_etl.etl_patient_program_discontinuation d
+inner join kenyaemr_etl.etl_patient_demographics de on d.patient_id=de.patient_id
+inner join kenyaemr_etl.etl_hiv_enrollment e on d.patient_id=e.patient_id
+inner join kenyaemr_etl.etl_patient_hiv_followup fup on d.patient_id = fup.patient_id
+left outer join kenyaemr_etl.etl_drug_event dr on e.patient_id = dr.patient_id
+left outer join(
+select
+      le.patient_id,
+      SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
+      ,'|',-2) AS VL_SEQ,
+      CASE
+      WHEN SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
+      ,'|',-2),'|',1)='1302' THEN 'LDL'
+      ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
+      ,'|',-2),'|',1) 
+      END AS second_last_vl_result,
+      Date_format(SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.date_created,null) ORDER BY le.date_created SEPARATOR '|') 
+      ,'|',-2),'|',1),'%d/%m/%Y') AS second_last_vl_date,
+      CASE
+      WHEN SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
+      ,'|',-2),'|',-1)='1302' THEN 'LDL'
+      ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
+      ,'|',-2),'|',-1) 
+      END AS recent_vl_result,
+      Date_format(SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.date_created,null) ORDER BY le.date_created SEPARATOR '|') 
+      ,'|',-2),'|',-1),'%d/%m/%Y') AS recent_vl_result_date
+from kenyaemr_etl.etl_laboratory_extract le
+group by le.patient_id ) as le ON d.patient_id=le.patient_id
+where date(d.visit_date) <= date(@endDate) and d.program_name='HIV'
+group by d.patient_id
+having visit_date between date(@startDate) and date(@endDate)

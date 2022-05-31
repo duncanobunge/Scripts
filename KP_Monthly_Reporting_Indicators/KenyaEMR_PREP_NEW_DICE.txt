@@ -1,0 +1,36 @@
+USE kenyaemr_etl;
+set @startDate='2022-04-01';
+set @endDate='2022-04-30';
+SELECT
+ eht.patient_id,
+ ecv.client_id,
+ epe.patient_id,
+ ecv.prep_screened,
+ ecv.prep_results,
+ epe.patient_type,
+ epe.population_type,
+ epe.kp_type
+FROM kenyaemr_etl.etl_hts_test eht
+LEFT OUTER JOIN(
+  SELECT
+   ecv.client_id,
+   ecv.prep_screened,
+   ecv.prep_results
+  FROM kenyaemr_etl.etl_clinical_visit ecv
+  WHERE ecv.visit_date BETWEEN @startDate and @endDate
+  GROUP BY ecv.client_id
+)as ecv ON eht.patient_id=ecv.client_id
+LEFT OUTER JOIN(
+   SELECT
+	 patient_id,
+	 patient_type,
+	 population_type,
+	 kp_type
+FROM kenyaemr_etl.etl_prep_enrolment  
+WHERE (visit_date BETWEEN @startDate AND @endDate) AND patient_type IN ('New Patient') AND kp_type<>''
+) as epe ON eht.patient_id=epe.patient_id
+WHERE eht.visit_date between @startDate and @endDate
+AND eht.population_type IN ('Key Population') AND eht.final_test_result IN ('Negative')
+GROUP BY eht.patient_id
+HAVING prep_screened IN ('Yes') and prep_results IN ('Eligible') and patient_type IN ('New Patient');
+

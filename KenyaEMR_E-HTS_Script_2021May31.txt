@@ -1,0 +1,51 @@
+-- the script is modified to remove the positive clients duplicate records..
+
+use kenyaemr_etl; -- set the kenyaemr_etl db as the targeted db
+Set @startdate='2020-10-01'; -- replace with the startdate of interest
+Set @enddate='2021-03-31';  -- replace with the enddate of interest
+SELECT
+	@n := @n + 1 serialnumber,
+    ed.FacilityName,
+	etl_hts_test.patient_id as htsnumber,
+	etl_hts_test.visit_date as testingdate,
+	etl_patient_demographics.DOB as dateofbirth,
+	DATEDIFF(DATE(etl_hts_test.visit_date),etl_patient_demographics.DOB) div 365.25 as age,
+	etl_patient_demographics.Gender as sex,
+	etl_patient_demographics.marital_status,
+	etl_hts_test.test_type as testtype,
+	etl_hts_test.key_population_type as keypop,
+	etl_hts_test.ever_tested_for_hiv as evertested,
+	etl_hts_test.months_since_last_test as retestmonths,
+	etl_hts_test.patient_disabled as disability,
+	etl_hts_test.disability_type as disabilitytype,
+	etl_hts_test.patient_consented as clientconsented,
+	etl_hts_test.client_tested_as as clienttestedas,
+	etl_hts_test.test_strategy as strategy,
+	etl_hts_test.hts_entry_point as servicepoint,
+    etl_hts_test.test_1_kit_name,
+	etl_hts_test.test_1_kit_lot_no,
+	etl_hts_test.test_1_kit_expiry,
+	etl_hts_test.test_1_result,
+	etl_hts_test.test_2_kit_name,
+	etl_hts_test.test_2_kit_lot_no,
+	etl_hts_test.test_2_kit_expiry,
+	etl_hts_test.test_2_result,
+	etl_hts_test.final_test_result as finalresult,
+	etl_hts_test.patient_given_result as finalresultgiven,
+	etl_hts_test.couple_discordant as couplediscordant,
+	etl_hts_test.tb_screening as tbscreening,
+	etl_hts_test.patient_had_hiv_self_test as selftesting,
+	us.username as htsprovider,
+	etl_hts_referral_and_linkage.facility_linked_to as facilityenrolled,
+	etl_hts_referral_and_linkage.enrollment_date as dateenrolled,
+	etl_hts_referral_and_linkage.ccc_number as cccnumber,
+	etl_hts_referral_and_linkage.art_start_date as artstartdate
+FROM etl_hts_test
+        INNER JOIN etl_patient_demographics ON etl_patient_demographics.patient_id = etl_hts_test.patient_id
+        INNER JOIN openmrs.users us on kenyaemr_etl.etl_hts_test.creator = us.user_id
+	    LEFT JOIN etl_hts_referral_and_linkage ON etl_hts_test.patient_id = etl_hts_referral_and_linkage.patient_id,(SELECT @n := 0) m,
+        etl_default_facility_info ed
+        WHERE etl_hts_test.visit_date BETWEEN date(@startdate) AND date(@enddate) 
+		group by etl_hts_test.patient_id,testingdate
+        order by  etl_hts_test.patient_id-- serialnumber
+        

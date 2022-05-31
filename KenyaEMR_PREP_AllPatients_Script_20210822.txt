@@ -1,0 +1,23 @@
+use openmrs;
+select 
+  DISTINCT epe.patient_id,
+  pi1.identifier as 'PrEP_Number',
+  edfi.FacilityName,
+  min(epe.visit_date) as prep_enrollment_date,
+  epe.patient_type,
+  epe.transfer_in_entry_point,
+  epf.treatment_plan, 
+  max(epf.visit_date) as latestVisitDate,
+  max(epf.appointment_date) as Next_Appointment_date
+from kenyaemr_etl.etl_prep_enrolment epe
+inner join kenyaemr_etl.etl_prep_followup epf on epe.patient_id = epf.patient_id
+left join(
+SELECT 
+   pi2.patient_id,
+   pi2.identifier
+FROM patient_identifier pi2 
+where pi2.identifier_type =16
+)as pi1 on epe.patient_id = pi1.patient_id,
+kenyaemr_etl.etl_default_facility_info edfi 
+group by epe.patient_id;
+

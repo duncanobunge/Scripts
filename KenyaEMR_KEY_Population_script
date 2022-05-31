@@ -1,0 +1,55 @@
+use kenyaemr_etl;
+select
+ epp.patient_id,
+ ec.unique_identifier as client_id,
+ edfi.siteCode as mfl_code,
+ epd.Gender,
+ epd.education_level,
+ epd.marital_status,
+ DATE_FORMAT(FROM_DAYS(DATEDIFF(max(ecv.visit_date),epp.date_enrolled)),'%Y')+0 as duration_as_kp, 
+ date_format(epd.DOB,'%m/%d/%Y') as date_of_birth,
+ date_format(epp.date_enrolled,'%m/%d/%Y') as date_of_enrollment,
+ DATE_FORMAT(FROM_DAYS(DATEDIFF(epp.date_enrolled,epd.DOB)),'%Y')+0 as age_at_enrollment,
+ ec.key_population_type as kp_type,
+ ece.ever_tested_for_hiv,
+ ece.share_test_results as reported_hiv_status_at_enrolment,
+ mid(max(concat(eht.visit_date,eht.final_test_result)),11) as current_hiv_test_result,
+ date_format(eht.visit_date,'%m/%d/%Y') as current_hiv_test_date,
+ CASE
+  WHEN mid(max(concat(ecv.visit_date,ecv.male_condoms_no)),11) NOT IN (" ") then 'Yes'
+  WHEN mid(max(concat(ecv.visit_date,ecv.female_condoms_no)),11) NOT IN (" ") then 'Yes'
+  WHEN mid(max(concat(ecv.visit_date,ecv.male_condoms_no)),11) NOT IN (" ") and mid(max(concat(ecv.visit_date,ecv.female_condoms_no)),11) NOT IN (" ") then 'Yes'
+  ELSE 'No'
+  END AS condom_use,
+ CASE
+  WHEN  mid(max(concat(ecv.visit_date,ecv.lubes_no)),11) NOT IN (" ") then 'Yes'
+  else  'No'
+  end as used_lubricant,
+ min(epe.visit_date) as date_initiated_prep,
+ GROUP_CONCAT((ecv.sti_results) ORDER BY ecv.visit_date  SEPARATOR '|') AS sti_screening_results_seq,
+ GROUP_CONCAT((ecv.visit_date) ORDER BY ecv.visit_date  SEPARATOR '|') AS sti_screening_dates_seq,
+ date_format(min(dr.date_started),'%m/%d/%Y') as 'Date of ART initiation (dd/mm/yyyy)',
+ CASE
+  when min(dr.date_started) NOT IN (" ") THEN ehe.date_confirmed_hiv_positive
+  else 'Missing'
+  end as 'Date_confirmed_HIV',
+ 'Not captured in the EMR' as 'Baseline # of Sexual/Needle Exchange Partners in Past 12 Months',
+ 'Not captured in the EMR' as 'Current # of Sexual/Needle Exchange Partners in Past 12 Months',
+ date_format(max(ecv.visit_date),'%m/%d/%Y') as latest_kp_clinic_visit,
+ date_format(max(ecv.appointment_date),'%m/%d/%Y') as next_kp_clinic_visit
+
+ 
+from kenyaemr_etl.etl_patient_program epp
+inner join kenyaemr_etl.etl_patient_demographics epd on epp.patient_id=epd.patient_id
+inner join kenyaemr_etl.etl_client_enrollment ece on epp.patient_id=ece.client_id
+inner join kenyaemr_etl.etl_contact ec on epp.patient_id=ec.client_id
+left join  kenyaemr_etl.etl_clinical_visit ecv on epp.patient_id = ecv.client_id
+left join  kenyaemr_etl.etl_prep_enrolment epe on epp.patient_id = epe.patient_id
+left join  kenyaemr_etl.etl_drug_event dr on epp.patient_id=dr.patient_id
+left join  kenyaemr_etl.etl_hiv_enrollment ehe on epp.patient_id= ehe.patient_id
+left outer join kenyaemr_etl.etl_hts_test eht ON epp.patient_id=eht.patient_id,
+kenyaemr_etl.etl_default_facility_info edfi
+where epp.program in ('KP')
+group by
+epp.patient_id
+

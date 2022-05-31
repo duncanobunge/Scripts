@@ -1,0 +1,90 @@
+use openmrs;
+select 
+   epd.patient_id,
+   epd.unique_patient_no,
+   edfi.FacilityName,
+   epd.Gender,
+   epd.DOB,
+   ROUND(DATEDIFF(CURDATE(),epd.DOB)/365.25,0) as 'CurrentAge',
+   epd.marital_status,
+   min(ehe.visit_date) as DateEnrolledInHIVCare,
+   ehe.date_confirmed_hiv_positive,
+   CASE
+		 WHEN  ehe.entry_point =160539  THEN 'Voluntary counseling and testing program'
+		 WHEN  ehe.entry_point =160538  THEN 'Prevention of maternal to child transmission program'
+		 WHEN  ehe.entry_point = 160537  THEN 'Pediatric inpatient service'
+		 WHEN  ehe.entry_point = 160536  THEN 'Adult inpatient service'
+		 WHEN  ehe.entry_point = 160542  THEN 'Outpatient department'
+		 WHEN  ehe.entry_point = 160541  THEN 'Tuberculosis treatment program' 
+		 WHEN  ehe.entry_point = 160543  THEN 'Community-based organization'
+		 WHEN  ehe.entry_point = 160544  THEN 'Under five clinic' 
+		 WHEN  ehe.entry_point = 160545  THEN 'Outreach program' 
+		 WHEN  ehe.entry_point = 160546  THEN 'Sexually transmitted infection program/clinic' 
+		 WHEN  ehe.entry_point = 160547 THEN 'Private company' 
+		 WHEN  ehe.entry_point = 160548 THEN 'Intravenous venous drug user outreach program' 
+		 WHEN  ehe.entry_point = 160549 THEN 'Adolescent outreach program'
+		 WHEN  ehe.entry_point = 160550 THEN 'Sex worker outreach program'
+		 WHEN  ehe.entry_point = 160551 THEN 'Self-referral' 
+		 WHEN  ehe.entry_point = 160552 THEN 'Nutrition program' 
+		 WHEN  ehe.entry_point = 5622 THEN 'Other'
+		 WHEN  ehe.entry_point = 160564 THEN 'Vaccination service'
+		 WHEN  ehe.entry_point = 160359 THEN 'Private home-based care'
+		 WHEN  ehe.entry_point = 159937 THEN 'Maternal and child health program' 
+		 WHEN  ehe.entry_point = 162223 THEN 'Voluntary male circumcision clinic' 
+		 WHEN  ehe.entry_point = 162050 THEN 'Comprehensive Care Unit' 
+		 ELSE  'Missing'
+		 END AS 'PatientSource',
+   CASE 
+		WHEN wh.bWHO IN (1204) THEN  'WHO STAGE 1 ADULT'
+		WHEN wh.bWHO IN (1205) THEN  'WHO STAGE 2 ADULT'
+		WHEN wh.bWHO IN (1206) THEN  'WHO STAGE 3 ADULT'
+		WHEN wh.bWHO IN (1207) THEN  'WHO STAGE 4 ADULT'
+		WHEN wh.bWHO IN (1220) THEN  'WHO STAGE 1 PEDS'
+		WHEN wh.bWHO IN (1221) THEN  'WHO STAGE 2 PEDS'
+		WHEN wh.bWHO IN (1222) THEN  'WHO STAGE 3 PEDS'
+		WHEN wh.bWHO IN (1223) THEN  'WHO STAGE 4 PEDS'
+		WHEN wh.bWHO IN (1067) THEN  'UNKNOWN'
+		ELSE 'Missing'
+		END AS bWHOStage,
+   min(ede.date_started) as StartARTDate,
+   mid(min(concat(ede.date_started, ede.regimen_name)), 11)as StartARTRegimen,
+   mid(min(concat(ede.date_started, ede.regimen_line)), 11)as StartARTRegimenLine,
+   max(ede.date_started) as CurrentARTStartDate,
+   mid(max(concat(ede.date_started, ede.regimen_name)), 11) as CurrentARTRegimen,
+   mid(max(concat(ede.date_started, ede.regimen_line)), 11)as CurrentARTRegimenLine,
+   mid(max(concat(ephf.visit_date, ephf.screened_for_tb)), 11) as TBSCreeningAtLastVisitDate,
+   CASE
+      WHEN mid(max(concat(ephf.visit_date, ephf.ever_on_ipt)), 11)= 1066 THEN 'NO'
+      WHEN mid(max(concat(ephf.visit_date, ephf.ever_on_ipt)), 11)= 1065 THEN 'YES'
+      ELSE 'Missing'
+      END as Ever_on_IPT,
+   CASE 
+		   WHEN eio.outcome IN (112141) THEN 'DISCONTINUED'
+		   WHEN eio.outcome IN (1267) THEN 'Completed'
+		   ELSE 'Missing'
+		   END As IPTCompletionstatus,
+   CASE 
+      WHEN eoe.patient_id IS NOT NULL THEN 'YES'
+      ELSE 'NO'
+      END AS 'EnrolledInOTZ?',
+   max(ephf.visit_date) as LastVisitDate,
+   max(ephf.next_appointment_date) as Next_TCA
+from  kenyaemr_etl.etl_hiv_enrollment ehe 
+inner join kenyaemr_etl.etl_patient_demographics epd  ON ehe.patient_id = epd.patient_id 
+inner join kenyaemr_etl.etl_patient_hiv_followup ephf ON ehe.patient_id = ephf.patient_id
+inner join kenyaemr_etl.etl_current_in_care ecic ON ehe.patient_id =ecic.patient_id 
+left outer join kenyaemr_etl.etl_drug_event ede on ehe.patient_id = ede.patient_id 
+left outer join kenyaemr_etl.etl_ipt_outcome eio on ehe.patient_id = eio.patient_id 
+left outer join kenyaemr_etl.etl_otz_enrollment eoe on ehe.patient_id = eoe.patient_id 
+LEFT JOIN(
+select
+ o.person_id,
+ if(max(e.encounter_datetime),o.value_coded, null) as cWHO,
+ if(min(e.encounter_datetime),o.value_coded, null) as bWHO
+from openmrs.obs o 
+inner join openmrs.encounter e on o.person_id = e.patient_id
+where concept_id in (5356)
+group by o.person_id
+)as wh ON ehe.patient_id = wh.person_id, kenyaemr_etl.etl_default_facility_info edfi
+group by ehe.patient_id 
+

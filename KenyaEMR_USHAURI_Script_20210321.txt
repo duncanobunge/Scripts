@@ -1,0 +1,48 @@
+use kenyaemr_etl;
+set @endDate='2021-02-28';
+set @startDate='2021-02-01';
+select 
+
+    cc.patient_id, 
+    CASE
+    WHEN DATEDIFF(CURDATE(),p.dob) div 365.25 < 10 THEN '3'
+    WHEN DATEDIFF(CURDATE(),p.dob) div 365.25 >= 10 AND 
+    DATEDIFF(CURDATE(),p.dob) div 365.25 < 20 THEN '2'
+    ELSE '1'
+    END AS group_id,
+    '' as 'language_id (Swahili - 1, English -2, Luo - 3)',
+    p.unique_patient_no,
+    p.given_name as f_name,
+    p.middle_name as m_name,
+    p.family_name as l_name,
+    p.dob as dob,
+    'Art' as client_status,
+    p.phone_number as phone_no,
+    p.next_of_kin_phone as alt_phone_no,
+    '' as 'share_no_name',
+    '' as 'smsenable (If smsenable? indicate YES else NO)',
+    substring(p.unique_patient_no,1,5) as 'mfl_code',
+    CASE 
+    WHEN p.Gender IN ('F') THEN '1'
+    WHEN p.Gender IN ('M') THEN '2'
+    ELSE 'Missing'
+    END as gender,
+    CASE
+		 WHEN p.marital_status IN ('Never married') THEN '1'
+		 WHEN p.marital_status IN ('Married') THEN '2'
+		 WHEN p.marital_status IN ('Divorced') THEN '3'
+		 WHEN p.marital_status IN ('Polygamous') THEN '8'
+		 WHEN p.marital_status IN ('Widowed') THEN '4'
+		 WHEN p.marital_status IN ('Living with partner') THEN '5'
+		 Else 'Missing'
+     End as marital,
+   min(e.visit_date) as enrollment_date,
+   '' as 'smsenabled/consented (If consented? indicate YES else NO)',
+   min(dr.date_started) as art_date,
+   max(fup.next_appointment_date) as 'next_tca'
+from kenyaemr_etl.etl_current_in_care cc 
+inner join kenyaemr_etl.etl_patient_hiv_followup fup on cc.patient_id=fup.patient_id
+inner join kenyaemr_etl.etl_patient_demographics p on p.patient_id=fup.patient_id
+inner join kenyaemr_etl.etl_hiv_enrollment e on fup.patient_id=e.patient_id
+inner join kenyaemr_etl.etl_drug_event dr on cc.patient_id = dr.patient_id
+group by cc.patient_id

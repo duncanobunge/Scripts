@@ -1,0 +1,71 @@
+use kenyaemr_etl;
+select
+  ecic.patient_id,
+  epd.unique_patient_no,
+  date_format(ecic.dob,'%d/%m/%Y') as 'DateofBirth',
+  DATE_FORMAT(FROM_DAYS(DATEDIFF(ecic.latest_vis_date,ecic.dob)), '%Y')+0 AS AgeatLastVisit,
+  ecic.Gender,
+  epd.phone_number,
+  date_format(ecic.enroll_date,'%d/%m/%Y') as 'DateEnrolledinHIVCare',
+  date_format(min(dr.date_started),'%d/%m/%Y') as 'DateofARTInitiation',
+  mid(min(concat(dr.date_started, dr.regimen_name)), 11)as 'InitialARTRegimen',
+  date_format(max(dr.date_started),'%d/%m/%Y') as 'DateStartedCurrRegimen',
+  mid(max(concat(dr.date_started, dr.regimen_name)), 11) as 'CurrentARTRegimen',
+  ecic.latest_tca,
+  ecic.latest_vis_date,
+  mid(max(concat(ephf.visit_date, ephf.weight)), 11) as weight,
+  CASE
+    WHEN mid(max(concat(ephf.visit_date,ephf.breastfeeding)),11) IN (1066) THEN 'No'
+    WHEN mid(max(concat(ephf.visit_date,ephf.breastfeeding)),11) IN (1066) THEN 'Yes'
+    WHEN ecic.Gender IN ('M') THEN 'NA'
+    ELSE 'Missing'
+    END as BreastfeedingStatus,
+  CASE
+	 WHEN mid(max(concat(ephf.visit_date,ephf.pregnancy_status)),11) IN (1066) THEN 'No'
+     WHEN mid(max(concat(ephf.visit_date,ephf.pregnancy_status)),11) IN (1065) THEN 'Yes'
+     WHEN ecic.Gender IN ('M') THEN 'NA'
+	 ELSE 'Missing'
+     END as PregnancyStatus,
+  le.recent_vl_result AS 'RecentViralloadResult',
+  le.recent_vl_result_date AS 'MostRecentViralloadDate',
+  -- le.recent_vl_reason as VLOrderReason,
+  CASE
+	 WHEN le.recent_vl_reason IN (161236) THEN 'Routine'
+	 WHEN le.recent_vl_reason IN (160032) THEN 'Failure of category I treatment'
+	 WHEN le.recent_vl_reason IN (843) THEN 'Regimen Failure'
+     WHEN le.recent_vl_reason IN (162080) THEN 'Initial'
+     WHEN le.recent_vl_reason IN (1259) THEN 'Change of Regimen'
+     WHEN le.recent_vl_reason IN (159882) THEN 'Breastfeeding'
+     WHEN le.recent_vl_reason IN (1434) THEN 'Currently Pregnant'
+	 ELSE le.recent_vl_reason
+  END as VLOrderReason
+from kenyaemr_etl.etl_current_in_care ecic
+inner join kenyaemr_etl.etl_patient_hiv_followup ephf ON ecic.patient_id = ephf.patient_id
+inner join kenyaemr_etl.etl_patient_demographics epd ON ecic.patient_id = epd.patient_id
+inner join kenyaemr_etl.etl_drug_event dr ON ecic.patient_id = dr.patient_id
+LEFT OUTER JOIN (
+select
+le.patient_id,
+SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
+,'|',-2) AS VL_SEQ,
+CASE
+ WHEN SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
+,'|',-2),'|',1)='1302' THEN 'LDL'
+ ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
+,'|',-2),'|',1) 
+END AS second_last_vl_result,
+Date_format(SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.date_created,null) ORDER BY le.date_created SEPARATOR '|') 
+,'|',-2),'|',1),'%d/%m/%Y') AS second_last_vl_date,
+CASE
+ WHEN SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
+,'|',-2),'|',-1)='1302' THEN 'LDL'
+ ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
+,'|',-2),'|',-1) 
+END AS recent_vl_result,
+Date_format(SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.date_created,null) ORDER BY le.date_created SEPARATOR '|') 
+,'|',-2),'|',-1),'%d/%m/%Y') AS recent_vl_result_date,
+SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.order_reason,null) ORDER BY le.date_created SEPARATOR '|') 
+,'|',-2),'|',1) as recent_vl_reason
+from kenyaemr_etl.etl_laboratory_extract le
+group by le.patient_id ) as le ON ecic.patient_id=le.patient_id
+group by ecic.patient_id

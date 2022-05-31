@@ -1,0 +1,43 @@
+-- The script pulls the gbv_screening status of the active clients as at their latest_visit date.
+-- It returns only clients with gbv_screening status determined at their last visit date.
+use kenyaemr_etl;
+select
+	egs.patient_id,
+    epd.unique_patient_no,
+    ecic.enroll_date,
+    DATE_FORMAT(FROM_DAYS(DATEDIFF(max(egs.visit_date),ecic.dob)), '%Y')+0 AS AgeatGBVScreeningDate,
+    ecic.Gender,
+	max(egs.visit_date) as gbv_screening_date,
+    Case
+	  when mid(max(concat(egs.visit_date,egs.ipv)),11) in ('1065') then 'Yes'
+      when mid(max(concat(egs.visit_date,egs.ipv)),11) in ('1066') then 'No'
+      end as IPV,
+	Case
+	  when mid(max(concat(egs.visit_date,egs.physical_ipv)),11) in ('1065') then 'Yes'
+      when mid(max(concat(egs.visit_date,egs.physical_ipv)),11) in ('1066') then 'No'
+      end as Physical_IPV,
+	Case
+	  when mid(max(concat(egs.visit_date,egs.sexual_ipv)),11) in ('1065') then 'Yes'
+      when mid(max(concat(egs.visit_date,egs.sexual_ipv)),11) in ('1066') then 'No'
+      end as Sexual_IPV,
+	Case
+	  when mid(max(concat(egs.visit_date,egs.emotional_ipv)),11)  in ('1065') then 'Yes'
+      when mid(max(concat(egs.visit_date,egs.emotional_ipv)),11)  in ('1066') then 'No'
+      end as Emotional_IPV,
+	Case
+	 when mid(max(concat(egs.visit_date,egs.ipv_relationship)),11) in ('1065') then 'Yes' 
+     when mid(max(concat(egs.visit_date,egs.ipv_relationship)),11) in ('1066') then 'No'
+     end as 'Relation_to_perpetraitor?',
+	-- mid(max(concat(egsa.visit_date,egsa.help_provider)),11) as 'help_provider',
+    Case
+	 when mid(max(concat(egsa.visit_date,egsa.action_taken)),11) in ('1065') then 'Yes' 
+     when mid(max(concat(egsa.visit_date,egsa.action_taken)),11) in ('1066') then 'No'
+     end as 'Action_taken?',
+    mid(max(concat(egsa.visit_date,egsa.reason_for_not_reporting)),11) as 'Reason_for_not_reporting',
+    ecic.latest_vis_date,
+    ecic.latest_tca
+from kenyaemr_etl.etl_current_in_care ecic 
+left outer join kenyaemr_etl.etl_gbv_screening egs on egs.patient_id=ecic.patient_id
+left outer join kenyaemr_etl.etl_gbv_screening_action egsa on egs.patient_id=egsa.patient_id
+left outer join kenyaemr_etl.etl_patient_demographics epd on ecic.patient_id=epd.patient_id
+group by ecic.patient_id

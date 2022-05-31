@@ -1,0 +1,119 @@
+USE openmrs;
+SET @endDate='2022-05-16';
+SELECT 
+   eca.patient_id,
+   i.siteCode,
+   i.FacilityName,
+   CASE
+    WHEN f.unique_patient_no <>"" THEN epd.unique_patient_no 
+    WHEN p.unique_patient_no<>"" THEN p.unique_patient_no
+    END AS uniquepatientnumber,
+   if(pi.identifier_type=5, pi.identifier, null) as NationalID_no,
+   epd.Gender,
+   epd.phone_number,
+   DATE_FORMAT(FROM_DAYS(DATEDIFF(ecic.latest_vis_date,epd.DOB)), '%Y')+0 AS AgeatLastVisit,
+   ecic.latest_tca,
+   ecic.latest_vis_date,
+   if(eca.ever_vaccinated in (1065), eca.visit_date, null) as Covid19AssessmentDate,
+   CASE
+     WHEN eca.ever_vaccinated in (1065) THEN 'Yes'
+     WHEN p.ever_vaccinated in (1065) THEN 'Yes'
+     END as EverVaccinated,
+   eca.first_dose_date as DateGivenFirstDose,
+   (case eca.first_vaccine_type
+            when 166156 then 'Astrazeneca'
+            when 166355 then 'Johnson and Johnson'
+            when 166154 then 'Moderna'
+            when 166155 then 'Pfizer'
+            when 166157 then 'Sputnik'
+            when 166379 then 'Sinopharm'
+            when 1067 then 'Unknown'
+            when 5622 then 'Other' end)as FirstDoseVaccineAdministered,
+	 (case eca.first_vaccination_verified when 164134 then 'Yes' else 'No' end)   as VaccineVerificationFirstDose,
+	 eca.second_dose_date as DateGivenSecondDose,
+	 (case eca.second_vaccine_type
+            when 166156 then 'Astrazeneca'
+            when 166355 then 'Johnson and Johnson'
+            when 166154 then 'Moderna'
+            when 166155 then 'Pfizer'
+            when 166157 then 'Sputnik'
+            when 166379 then 'Sinopharm'
+            when 1067  then 'Unknown'
+            when 5622 then 'Other' end)  as SecondDoseVaccineAdministered,
+   (case eca.second_vaccination_verified when 164134 then 'Yes' else 'No' end)  as VaccineVerificationSecondDose,
+   (Case when p.final_vaccination_status in (166192) then 'PartialVaccination'
+         when eca.final_vaccination_status in  (5585) then 'FullyVaccination'
+         WHEN !(eca.first_vaccine_type ="" and eca.second_vaccine_type ="") THEN 'FullyVaccination'
+         else 'not vaccinated' end) as FinalVaccineStatus,
+   (case eca.ever_received_booster when 1065 then 'Yes' when 1066 then 'No' end) as BoosterGiven,
+   (case eca.booster_vaccine_taken
+            when 166156 then 'Astrazeneca'
+            when 166355 then 'Johnson and Johnson'
+            when 166154 then 'Moderna'
+            when 166155 then 'Pfizer'
+            when 166157 then 'Sputnik'
+            when 166379 then 'Sinopharm'
+            when 1067 then 'Unknown'
+            when 5622 then 'Other(Specify)' end) as BoosterDose,
+	eca.date_taken_booster_vaccine as BoosterDoseDate,
+	eca.booster_sequence as Sequence,
+	(case eca.ever_tested_covid_19_positive
+            when 703 then 'Yes'
+            when 664 then 'No'
+            when 1067 then 'Unknown' end) as COVID19TestResult,
+    (case eca.booster_dose_verified when 164134 then 'Yes' end) as BoosterDoseVerified,
+	 eca.date_tested_positive as COVID19TestDate,
+	(case eca.symptomatic
+            when 1068 then 'Yes'
+            when 165912 then 'No' END) as PatientStatus,
+	(case eca.hospital_admission
+            when 1065 then 'Yes'
+            when 1066 then 'No' end) as AdmissionStatus,
+	eca.admission_unit as AdmissionUnit,
+       ''  as MissedAppointmentDueToCOVID19,
+       ''  as COVID19PositiveSinceLasVisit,
+       ''  as COVID19TestDateSinceLastVisit,
+       ''  as PatientStatusSinceLastVisit,
+       ''  as AdmissionStatusSinceLastVisit,
+       ''  as AdmissionStartDate,
+       ''  as AdmissionEndDate,
+       ''  as AdmissionUnitSinceLastVisit,
+       (case eca.on_oxygen_supplement when 1065 then 'Yes' when 1066 then 'No' end) as SupplementalOxygenReceived,
+       (case eca.on_ventillator when 1065 then 'Yes' when 1066 then 'No' end) as PatientVentilated,
+       eca.date_created as Date_Created,
+       eca.date_last_modified as Date_Last_Modified,
+       '' as EverCOVID19Positive,
+       '' as TracingFinalOutcome,
+       '' as CauseOfDeath
+FROM kenyaemr_etl.etl_current_in_care ecic
+LEFT OUTER join kenyaemr_etl.etl_patient_demographics epd ON ecic.patient_id = epd.patient_id
+LEFT OUTER join kenyaemr_etl.etl_covid19_assessment eca  ON ecic.patient_id = eca.patient_id
+LEFT OUTER JOIN openmrs.patient_identifier pi ON ecic.patient_id = pi.patient_id
+left outer join (
+select 
+  a.patient_id,
+  pd.unique_patient_no,
+  a.ever_vaccinated,
+  a.final_vaccination_status 
+from kenyaemr_etl.etl_covid19_assessment a
+inner join kenyaemr_etl.etl_patient_demographics pd ON a.patient_id = pd.patient_id
+group by patient_id
+having mid(max(concat(visit_date,final_vaccination_status)),11) = 166192 and max(visit_date) <= date(@endDate)
+) as p on eca.patient_id=p.patient_id
+left outer join (
+select 
+a.patient_id,
+  pd.unique_patient_no,
+  a.ever_vaccinated,
+  a.final_vaccination_status  
+from kenyaemr_etl.etl_covid19_assessment a 
+inner join kenyaemr_etl.etl_patient_demographics pd ON a.patient_id = pd.patient_id
+where a.final_vaccination_status = 5585 and a.visit_date <= date(@endDate)
+group by a.patient_id
+) as f on ecic.patient_id=f.patient_id,
+kenyaemr_etl.etl_default_facility_info i
+-- WHERE eca.visit_date<=date(@endDate) -- ,166192) -- OR eca.ever_vaccinated IN (1065,1066)
+GROUP BY eca.patient_id;
+-- Having
+-- max(
+

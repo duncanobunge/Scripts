@@ -1,0 +1,19 @@
+use kenyaemr_etl;
+set @endDate='2022-04-30';
+set @startDate='2022-04-01';
+select
+ ecv.client_id,
+ eht.patient_id
+from kenyaemr_etl.etl_clinical_visit ecv
+left outer join(
+select
+ eht.patient_id
+from kenyaemr_etl.etl_hts_test eht
+where eht.visit_date between @startDate and @endDate
+and eht.final_test_result in('Positive')
+) as eht on ecv.client_id=eht.patient_id
+where ecv.visit_date between @startDate and @endDate
+and ecv.test_frequency IN ('Repeat') ;
+
+
+

@@ -1,0 +1,26 @@
+
+use openmrs;
+SELECT e.DOB As DoB,
+DATE_FORMAT(FROM_DAYS(DATEDIFF(CURDATE(),DoB)), '%Y')+0 AS Age,
+GreenCard.* ,
+		CASE 
+		   WHEN GreenCard.person_present  IN (978) THEN 'Self'
+		   WHEN GreenCard.person_present  IN (161642) THEN 'Treatment SUpporter'
+           WHEN GreenCard.person_present  IN (159802) THEN 'Refill from Other Facility'
+           
+		   ELSE 'Missing'
+		   END As Person_Present,
+           
+           CASE 
+		   WHEN GreenCard.Nutritional_status IN (114413) THEN 'Obese'
+		   WHEN GreenCard.Nutritional_status IN (1115) THEN 'Normal'
+           WHEN GreenCard.Nutritional_status IN (163303) THEN 'MAM'
+           WHEN GreenCard.Nutritional_status IN (163302) THEN 'SAM'
+		   ELSE 'Missing'
+		   END As Nutritionalstatus
+
+           FROM kenyaemr_etl.etl_patient_hiv_followup GreenCard
+INNER JOIN kenyaemr_etl.etl_patient_demographics e
+ON GreenCard.patient_id=e.patient_id
+WHERE GreenCard.visit_date>='2021-10-01' AND GreenCard.visit_date<='2021-10-31'
+ORDER BY GreenCard.visit_date DESC;

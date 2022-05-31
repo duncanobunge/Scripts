@@ -1,0 +1,13 @@
+USE openmrs;
+select
+epd.unique_patient_no,
+DATE_FORMAT(FROM_DAYS(DATEDIFF(ecic.latest_vis_date,ecic.dob)),'%Y')+0 as Age_at_lastVisit,
+pa.county_district as County,
+pa.state_province as Sub_county,
+pa.address6 as Location,
+pa.address5 as Sub_location,
+pa.city_village as Village,
+pa.address2 as Landmark
+from kenyaemr_etl.etl_patient_demographics epd
+inner join kenyaemr_etl.etl_current_in_care ecic on epd.patient_id=ecic.patient_id
+left outer join person_address pa on epd.patient_id=pa.person_id

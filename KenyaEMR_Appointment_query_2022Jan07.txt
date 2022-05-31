@@ -1,0 +1,76 @@
+use openmrs;
+set @startDate='2021-10-01'; -- please replace with the start period of interest
+set @endDate='2021-12-31';  -- please replace with the end period of interest
+                    select 
+				fup.patient_id, 
+				p.unique_patient_no, 
+				p.DOB,
+				DATE_FORMAT(FROM_DAYS(DATEDIFF(@endDate,p.DOB)),'%Y')+0 as Age,
+				p.Gender,
+				max(e.visit_date) as enroll_date,
+				greatest(max(e.visit_date), ifnull(max(date(e.transfer_in_date)),'0000-00-00')) as latest_enrolment_date,
+				greatest(max(fup.visit_date), ifnull(max(d.visit_date),'0000-00-00')) as latest_vis_date,
+				greatest(mid(max(concat(fup.visit_date,fup.next_appointment_date)),11), ifnull(max(d.visit_date),'0000-00-00')) as latest_tca,
+				d.patient_id as disc_patient,
+				d.effective_disc_date as effective_disc_date,
+				max(d.visit_date) as date_discontinued,
+				d.discontinuation_reason,
+                               ecdt.visit_date,
+				ecdt.tracing_type,
+			       ecdt.tracing_outcome,
+				ecdt.attempt_number,
+				ecdt.is_final_trace,
+				ecdt.true_status,
+				de.patient_id as started_on_drugs
+			from kenyaemr_etl.etl_patient_hiv_followup fup
+			join kenyaemr_etl.etl_patient_demographics p on p.patient_id=fup.patient_id
+			join kenyaemr_etl.etl_hiv_enrollment e on fup.patient_id=e.patient_id
+			left outer join kenyaemr_etl.etl_drug_event de on e.patient_id = de.patient_id and de.program='HIV' and date(date_started) <= date(curdate())
+			left outer join(
+                           select
+                              cdt.patient_id,
+                              max(cdt.visit_date) as visit_date,
+                              CASE
+                              
+		                      WHEN mid(max(concat(cdt.visit_date,cdt.tracing_type)),11) IN (1650) THEN 'Mobile phone' 
+		                      WHEN mid(max(concat(cdt.visit_date,cdt.tracing_type)),11) IN (164965) THEN 'Physical tracing'
+		                      WHEN mid(max(concat(cdt.visit_date,cdt.tracing_type)),11) IN (5622) THEN 'Other' 
+		                      ELSE ''
+		                      END as tracing_type,
+		              CASE
+		                     WHEN mid(max(concat(cdt.visit_date,cdt.tracing_outcome)),11) IN (1267) THEN 'Contacted'
+		                     WHEN mid(max(concat(cdt.visit_date,cdt.tracing_outcome)),11) IN (1118) THEN 'Not Contacted'
+		                     ELSE ''
+		                     END as tracing_outcome,
+                              mid(max(concat(cdt.visit_date,cdt.attempt_number)),11) as attempt_number,
+                              CASE
+                                     WHEN mid(max(concat(cdt.visit_date,cdt.is_final_trace)),11) IN (163339) THEN  'Incomplete'
+                                     WHEN mid(max(concat(cdt.visit_date,cdt.is_final_trace)),11) IN (1267) THEN  'Complete' 
+                                     ELSE ''
+                                     END as is_final_trace,
+                              CASE
+                                     WHEN mid(max(concat(cdt.visit_date,cdt.true_status)),11) IN (160037) THEN 'Still on TRx' 
+                                     WHEN mid(max(concat(cdt.visit_date,cdt.true_status)),11) IN (1693) THEN 'Transferred'
+                                     WHEN mid(max(concat(cdt.visit_date,cdt.true_status)),11) IN (160432) THEN 'Dead'
+                                     WHEN mid(max(concat(cdt.visit_date,cdt.true_status)),11) IN (142917) THEN 'Death of unknown cause'
+                                     WHEN mid(max(concat(cdt.visit_date,cdt.true_status)),11) IN (164435) THEN 'Other patient decision'
+                                     WHEN mid(max(concat(cdt.visit_date,cdt.true_status)),11) IN (5240) THEN 'LTFU'
+                                     ELSE 'Patient status undetermined'
+                                     END as true_status
+			    from kenyaemr_etl.etl_ccc_defaulter_tracing cdt
+                           left outer join kenyaemr_etl.etl_patient_hiv_followup epf ON epf.patient_id = cdt.patient_id
+                           group by cdt.patient_id
+                            having (date(max(cdt.visit_date)) >= date(max(epf.next_appointment_date)))
+                         ) ecdt on ecdt.patient_id= fup.patient_id
+                left outer join
+				          (select 
+				             patient_id, 
+				             coalesce(date(effective_discontinuation_date),visit_date) visit_date,
+				             max(date(effective_discontinuation_date)) as effective_disc_date,
+				             discontinuation_reason
+				             from kenyaemr_etl.etl_patient_program_discontinuation
+				             where date(visit_date) <= date(@endDate) and program_name='HIV'
+				             group by patient_id
+				          )d on d.patient_id = fup.patient_id where fup.visit_date <= date(@endDate) 
+				          group by patient_id
+				          having (date(latest_tca) BETWEEN date(@startDate) AND date(@endDate))
