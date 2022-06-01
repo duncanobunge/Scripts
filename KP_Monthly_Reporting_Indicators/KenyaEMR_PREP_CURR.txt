@@ -2,19 +2,42 @@ USE kenyaemr_etl;
 set @startDate='2022-04-01';
 set @endDate='2022-04-30';
 SELECT
+ 
+  COUNT(IF(a.kp_type IN ('MSM') AND Age <15 , a.patient_id,NULL)) as MSM_less_15,
+  COUNT(IF(a.kp_type IN ('MSM') AND Age BETWEEN 15 AND 19 , a.patient_id,NULL)) as MSM_btwn_15_19,
+  COUNT(IF(a.kp_type IN ('MSM') AND Age BETWEEN 20 AND 24 , a.patient_id,NULL)) as MSM_btwn_20_24,
+  COUNT(IF(a.kp_type IN ('MSM') AND Age >=25 , a.patient_id,NULL)) as MSM_grteq_25,
+  COUNT(IF(a.kp_type IN ('FSW') AND Age <15 , a.patient_id,NULL)) as FSW_less_15,
+  COUNT(IF(a.kp_type IN ('FSW') AND Age BETWEEN 15 AND 19 , a.patient_id,NULL)) as FSW_btwn_15_19,
+  COUNT(IF(a.kp_type IN ('FSW') AND Age BETWEEN 20 AND 24 , a.patient_id,NULL)) as FSW_btwn_20_24,
+  COUNT(IF(a.kp_type IN ('FSW') AND Age >=25 , a.patient_id,NULL)) as FSW_grteq_25,
+  COUNT(IF(a.kp_type IN ('PWID') AND Age <15 AND a.Gender IN ('F') , a.patient_id,NULL)) as PWID_F_less_15,
+  COUNT(IF(a.kp_type IN ('PWID') AND a.Gender IN ('F') AND Age BETWEEN 15 AND 19 , a.patient_id,NULL)) as PWID_F_btwn_15_19,
+  COUNT(IF(a.kp_type IN ('PWID') AND a.Gender IN ('F') AND Age BETWEEN 20 AND 24 , a.patient_id,NULL)) as PWID_F_btwn_20_24,
+  COUNT(IF(a.kp_type IN ('PWID') AND a.Gender IN ('F') AND Age >=25 , a.patient_id,NULL)) as PWID_F_grteq_25,
+  COUNT(IF(a.kp_type IN ('PWID') AND Age <15 AND a.Gender IN ('M') , a.patient_id,NULL)) as PWID_M_less_15,
+  COUNT(IF(a.kp_type IN ('PWID') AND a.Gender IN ('M') AND Age BETWEEN 15 AND 19 , a.patient_id,NULL)) as PWID_M_btwn_15_19,
+  COUNT(IF(a.kp_type IN ('PWID') AND a.Gender IN ('M') AND Age BETWEEN 20 AND 24 , a.patient_id,NULL)) as PWID_M_btwn_20_24,
+  COUNT(IF(a.kp_type IN ('PWID') AND a.Gender IN ('M') AND Age >=25 , a.patient_id,NULL)) as PWID_M_grteq_25
+FROM(
+ SELECT
 	 epe.patient_id,
-     DATE_FORMAT(FROM_DAYS(DATEDIFF(epf.visit_date,de.DOB)), '%Y')+0 AS AgeatLastVisit,
+     DATE_FORMAT(FROM_DAYS(DATEDIFF(epf.visit_date,de.DOB)), '%Y')+0 AS Age,
      de.Gender,
 	 epe.patient_type,
 	 CASE epe.kp_type
        WHEN 160578 THEN 'MSM'
        WHEN 160579 THEN 'FSW'
+       WHEN 165090 THEN 'PWID'
+       ELSE 'Missing'
        END AS kp_type,
 	 epf.visit_date,
      epf.treatment_plan
 FROM kenyaemr_etl.etl_prep_enrolment epe  
 INNER join kenyaemr_etl.etl_prep_followup  epf ON epe.patient_id=epf.patient_id
 LEFT OUTER JOIN kenyaemr_etl.etl_patient_demographics de ON epe.patient_id=de.patient_id
-WHERE (epf.visit_date BETWEEN @startDate AND @endDate) AND epe.patient_type IN ('New Patient') AND epe.kp_type<>''
+WHERE (epf.visit_date BETWEEN @startDate AND @endDate) AND epe.patient_type IN ('New Patient') AND epe.kp_type<>'')as a;
 -- group by epe.patient_id
+
+
 
