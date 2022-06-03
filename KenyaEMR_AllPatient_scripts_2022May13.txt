@@ -1,5 +1,5 @@
 use openmrs;
-set @endDate='2022-04-30';
+set @endDate=curdate();
 select
  e.patient_id, 
  de.unique_patient_no,

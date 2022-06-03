@@ -4,17 +4,24 @@ set @endDate='2022-04-30';
 SELECT
  eht.patient_id,
  ecv.client_id,
+ de.Gender,
+ DATE_FORMAT(FROM_DAYS(DATEDIFF(max(ecv.visit_date),de.DOB)), '%Y')+0 AS Age,
+ ecv.key_population_type,
  ecv.prep_screened
 FROM kenyaemr_etl.etl_hts_test eht
+LEFT OUTER JOIN kenyaemr_etl.etl_patient_demographics de ON eht.patient_id=de.patient_id
 LEFT OUTER JOIN(
   SELECT
    ecv.client_id,
-   ecv.prep_screened
+   ecv.prep_screened,
+   ecv.visit_date,
+   ec.key_population_type
   FROM kenyaemr_etl.etl_clinical_visit ecv
+  LEFT OUTER JOIN kenyaemr_etl.etl_contact ec ON ecv.client_id=ec.client_id
   WHERE ecv.visit_date BETWEEN @startDate and @endDate
   GROUP BY ecv.client_id
 )as ecv ON eht.patient_id=ecv.client_id
-WHERE visit_date between @startDate and @endDate
+WHERE eht.visit_date between @startDate and @endDate
 AND population_type IN ('Key Population') AND final_test_result IN ('Negative')
 GROUP BY eht.patient_id
 HAVING prep_screened IN ('Yes')

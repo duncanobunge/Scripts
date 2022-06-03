@@ -3,15 +3,22 @@ set @endDate='2022-04-30';
 set @startDate='2022-04-01';
 select
  ecv.client_id,
- eht.patient_id
+ de.Gender,
+ DATE_FORMAT(FROM_DAYS(DATEDIFF(DATE(@endDate),de.DOB)), '%Y')+0 AS Age,
+ ec.key_population_type,
+ eht.final_test_result
+
 from kenyaemr_etl.etl_clinical_visit ecv
 left outer join(
 select
- eht.patient_id
+ eht.patient_id,
+ eht.final_test_result
 from kenyaemr_etl.etl_hts_test eht
 where eht.visit_date between @startDate and @endDate
 and eht.final_test_result in('Positive')
 ) as eht on ecv.client_id=eht.patient_id
+left outer join kenyaemr_etl.etl_contact ec ON ecv.client_id=ec.client_id
+left outer join kenyaemr_etl.etl_patient_demographics de ON ecv.client_id=de.patient_id
 where ecv.visit_date between @startDate and @endDate
 and ecv.test_frequency IN ('Repeat') ;
 
