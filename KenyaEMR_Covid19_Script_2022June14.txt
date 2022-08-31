@@ -60,7 +60,7 @@ CASE
    WHEN p.ever_vaccinated IN(1066) or p.ever_vaccinated ="" THEN 'PartiallyVaccinated'
    WHEN p.ever_vaccinated="" THEN 'FullyVaccinated'
    ELSE 'NotVaccinated'
-   END AS 'FinalVaccinationStatus',
+   END AS FinalVaccinationStatus,
  (CASE f.ever_received_booster 
              WHEN 1065 THEN 'Yes' 
              WHEN 1066 THEN 'No' 

@@ -5,6 +5,7 @@ select
  epd.unique_patient_no as upn,
  concat(epd.given_name," ",epd.middle_name," ", epd.family_name) as name,
  epd.DOB,
+ DATE_FORMAT(FROM_DAYS(DATEDIFF(ecc.latest_vis_date,ecc.dob)), '%Y')+0 AS AgeatLastVisit,
  ecc.Gender,
  epd.marital_status,
  epd.phone_number,

@@ -11,8 +11,8 @@ select
   mid(min(concat(dr.date_started, dr.regimen_name)), 11)as 'InitialARTRegimen',
   date_format(max(dr.date_started),'%d/%m/%Y') as 'DateStartedCurrRegimen',
   mid(max(concat(dr.date_started, dr.regimen_name)), 11) as 'CurrentARTRegimen',
-  ecic.latest_tca,
-  ecic.latest_vis_date,
+  date_format(ecic.latest_tca,'%d/%m/%Y'),
+   date_format(ecic.latest_vis_date,'%d/%m/%Y'),
   mid(max(concat(ephf.visit_date, ephf.weight)), 11) as weight,
   CASE
     WHEN mid(max(concat(ephf.visit_date,ephf.breastfeeding)),11) IN (1066) THEN 'No'
@@ -28,7 +28,8 @@ select
      END as PregnancyStatus,
   le.recent_vl_result AS 'RecentViralloadResult',
   le.recent_vl_result_date AS 'MostRecentViralloadDate',
-  -- le.recent_vl_reason as VLOrderReason,
+   date_format(le.DateLastestVLReceived,'%d/%m/%Y') as DateReceivedResults,
+   date_format(le.SampleCollectionDate,'%d/%m/%Y') as DateofSampleCollection,
   CASE
 	 WHEN le.recent_vl_reason IN (161236) THEN 'Routine'
 	 WHEN le.recent_vl_reason IN (160032) THEN 'Failure of category I treatment'
@@ -48,6 +49,8 @@ select
 le.patient_id,
 SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
 ,'|',-2) AS VL_SEQ,
+max(le.date_test_requested) as SampleCollectionDate,
+max(le.date_test_result_received) as DateLastestVLReceived,
 CASE
  WHEN SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856','1305'),le.test_result,null) ORDER BY le.date_created SEPARATOR '|') 
 ,'|',-2),'|',1)='1302' THEN 'LDL'

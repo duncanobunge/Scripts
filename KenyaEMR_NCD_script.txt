@@ -1,0 +1,66 @@
+-- this scripts pulls all the active clients as at end of the immediate reported month
+-- from the linelist, use systematic sampling to generate your sample size for RDQA activities.
+-- paste your sample size line-list on the EMR sheet on the RDQA tool.
+-- On the Greencard sheet proceed with the manual entry from the paper greencard.
+-- Finally check on your on the Scores sheets
+use kenyaemr_etl;
+select
+  cc.patient_id,
+  de.unique_patient_no as 'Unique Patient ID',
+  date_format(cc.dob,'%d-%m-%Y') as 'DOB (dd-mm-yyyy ELSE missing)',
+  DATE_FORMAT(FROM_DAYS(DATEDIFF(cc.latest_vis_date,cc.dob)), '%Y')+0 AS AgeatLastVisit,
+  CASE
+  WHEN cc.Gender ='F' THEN 'F'
+  WHEN  cc.Gender ='M' THEN 'M' 
+  ELSE 'Missing'
+  END as 'Sex (F/M ELSE Missing)',
+  date_format(cc.latest_vis_date,'%d-%m-%Y') as 'Date Last Appointment(dd-mm-yyyy)',
+  date_format(cc.latest_tca,'%d-%m-%Y') as 'Date Next Appointment (dd-mm-yyyy)',
+  '' as DrugDosageGiven,
+  mid(max(concat(fup.visit_date, fup.weight)), 11) as 'Weight(kg)',
+  mid(max(concat(fup.visit_date, fup.height)), 11) as 'Height(cm)',
+  Round(mid(max(concat(fup.visit_date, fup.weight)), 11)/((mid(max(concat(fup.visit_date, fup.height)), 11)*0.01)*(mid(max(concat(fup.visit_date, fup.height)), 11)*0.01)),2) as 'BMI',
+  CASE WHEN mid(max(concat(fup.visit_date,fup.tb_status)),11) is NULL THEN 'Missing' ELSE 'YES' END AS 'TB Screening (Yes/No/Missing)',
+  date_format(kenyaemr_etl.etl_ipt_initiation.visit_date,'%d-%m-%Y') as 'IPT Initiation Date (dd-mm-yyyy)',
+  mid(max(concat(fup.visit_date, fup.cough)), 11) as 'Cough (Y/N/Missing)',
+  CASE 
+      WHEN mid(max(concat(fup.visit_date, fup.spatum_smear_ordered)),11)!='' OR  mid(max(concat(fup.visit_date, fup.chest_xray_ordered)), 11) !='' or
+      mid(max(concat(fup.visit_date, fup.genexpert_ordered)), 11)!='' THEN 'Y'
+      ELSE 'N'
+      END AS 'InvestigationForCough',
+  CASE 
+      WHEN mid(max(concat(fup.visit_date, fup.spatum_smear_ordered)),11)!=''  then 'Sputum_smear'
+      when mid(max(concat(fup.visit_date, fup.chest_xray_ordered)), 11) !='' then 'Chest_xray'
+      when mid(max(concat(fup.visit_date, fup.genexpert_ordered)), 11)!='' THEN 'GeneXpert'
+      ELSE 'Missing'
+      END AS 'TypeOfInvestigation',
+  CASE 
+      WHEN mid(max(concat(fup.visit_date, fup.spatum_smear_result)),11)!='' THEN mid(max(concat(fup.visit_date, fup.spatum_smear_result)),11)
+      WHEN mid(max(concat(fup.visit_date, fup.chest_xray_result)), 11) !='' THEN mid(max(concat(fup.visit_date, fup.chest_xray_result)), 11)
+      WHEN mid(max(concat(fup.visit_date, fup.genexpert_result)), 11)!='' THEN  mid(max(concat(fup.visit_date, fup.genexpert_result)), 11)
+      ELSE 'Missing'
+      END AS 'InvestigationResult',
+  mid(max(concat(fup.visit_date, fup.temperature)), 11) as 'Temperature',
+  CASE 
+  when mid(max(concat(fup.visit_date, fup.nutritional_status)), 11)=114413 THEN 'overweight/obese'
+  when mid(max(concat(fup.visit_date, fup.nutritional_status)), 11)=163303 THEN 'Moderate acute malnutrition'
+  when mid(max(concat(fup.visit_date, fup.nutritional_status)), 11)=163302 THEN 'Severe acute malnutrition'
+  when mid(max(concat(fup.visit_date, fup.nutritional_status)), 11)=1115 THEN 'Normal'
+  ELSE 'Missing'
+  end as 'Nutrition_status',
+  mid(max(concat(fup.visit_date, fup.general_examination)), 11) as General_examination,
+  CASE
+    WHEN mid(max(concat(fup.visit_date, fup.has_chronic_illnesses_cormobidities)), 11)=1066 THEN 'No'
+    WHEN mid(max(concat(fup.visit_date, fup.has_chronic_illnesses_cormobidities)), 11)=1065 THEN 'Yes'
+    ELSE 'Missing'
+  END as ChronicCormobidities
+from kenyaemr_etl.etl_current_in_care cc
+inner join kenyaemr_etl.etl_drug_event dr ON cc.patient_id = dr.patient_id
+inner join kenyaemr_etl.etl_patient_hiv_followup fup on cc.patient_id= fup.patient_id
+inner join kenyaemr_etl.etl_patient_demographics de on cc.patient_id = de.patient_id
+inner join kenyaemr_etl.etl_hiv_enrollment ee on cc.patient_id = ee.patient_id
+left outer join kenyaemr_etl.etl_ipt_outcome on cc.patient_id =  kenyaemr_etl.etl_ipt_outcome.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_ipt_initiation ON cc.patient_id = kenyaemr_etl.etl_ipt_initiation.patient_id
+group by patient_id
+order by rand()
+-- limit 25
