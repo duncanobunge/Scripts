@@ -4,12 +4,16 @@ SET @endDate='2022-04-30';
 select
 	ece.client_id,
 	ec.unique_identifier,
+	de.Gender,
+    DATE_FORMAT(FROM_DAYS(DATEDIFF(DATE(@endDate),de.DOB)), '%Y')+0 AS Age,
+    ec.key_population_type,
 	min(ec.visit_date) as enrollmentdate,
     ece.ever_tested_for_hiv,
     ece.share_test_results,
     ece.receiving_hiv_care
 from kenyaemr_etl.etl_contact ec
 inner join kenyaemr_etl.etl_client_enrollment ece ON ec.client_id=ece.client_id
+LEFT OUTER join kenyaemr_etl.etl_patient_demographics de ON ec.client_id=de.patient_id
 where (ec.visit_date between @startDate and @endDate) and (ece.share_test_results IN ('Yes I tested positive'))
 group by ec.client_id
  

@@ -1,139 +1,69 @@
 use openmrs;
-set @endDate='2022-04-30';
+set @endDate='2022-07-31';
 select
  e.patient_id, 
  de.unique_patient_no,
  eph.SiteName,
- CPIMS_No as OVC_CPIMS_No,
  de.Gender,
  de.DOB,
- dm.marital_status,
-pa.county_district as County,
-pa.state_province as Sub_county,
-pa.address6 as Location,
-pa.address5 as Sub_location,
-pa.city_village as Village,
-pa.address2 as Landmark,
+ DATE_FORMAT(FROM_DAYS(DATEDIFF(max(fup.visit_date),de.DOB)), '%Y')+0 AS AgeatLastVisit,
+ mid(max(concat(fup.visit_date,fup.weight)), 11) as Weight,
+ mid(max(concat(fup.visit_date,fup.height)), 11) as Height,
+ fup.population_type,
+ mid(max(concat(e.visit_date, e.patient_type)), 11) as PatientType,
+ mid(max(concat(e.visit_date, e.entry_point)), 11) as EntryPoint,
+ max(e.transfer_in_date) DateTransferredIn,
+ mid(max(concat(e.visit_date, e.facility_transferred_from)), 11) as FacilityTransferedFrom,
+ e.date_confirmed_hiv_positive as DateConfirmedPositive,
  min(e.visit_date) as DateEnrolledInHIVCare,
- e.date_confirmed_hiv_positive,
- max(fup.visit_date) as LastVisitDate,
- max(fup.next_appointment_date) as Next_TCA,
  min(dr.date_started) as StartARTDate,
  mid(min(concat(dr.date_started, dr.regimen_name)), 11)as StartARTRegimen,
  mid(min(concat(dr.date_started, dr.regimen_line)), 11)as StartARTRegimenLine,
  max(dr.date_started) as CurrentARTStartDate,
  mid(max(concat(dr.date_started, dr.regimen_name)), 11) as CurrentARTRegimen,
  mid(max(concat(dr.date_started, dr.regimen_line)), 11)as CurrentARTRegimenLine,
-  dve.RegimenSeq,
-  dve.DateStartedRegimenSeq,
-  dve.DateSwitchedRegimenSeq,
-  dve.ReasonSwitchedRegimenSeq,
-  eph.NextTCASeq,
-  CASE 
-		WHEN wh.bWHO IN (1204) THEN  'WHO STAGE 1 ADULT'
-		WHEN wh.bWHO IN (1205) THEN  'WHO STAGE 2 ADULT'
-		WHEN wh.bWHO IN (1206) THEN  'WHO STAGE 3 ADULT'
-		WHEN wh.bWHO IN (1207) THEN  'WHO STAGE 4 ADULT'
+ CASE 
+		WHEN wh.cWHO IN (1204) THEN  'WHO STAGE 1 ADULT'
+		WHEN wh.cWHO IN (1205) THEN  'WHO STAGE 2 ADULT'
+		WHEN wh.cWHO IN (1206) THEN  'WHO STAGE 3 ADULT'
+		WHEN wh.cWHO IN (1207) THEN  'WHO STAGE 4 ADULT'
 		WHEN wh.bWHO IN (1220) THEN  'WHO STAGE 1 PEDS'
-		WHEN wh.bWHO IN (1221) THEN  'WHO STAGE 2 PEDS'
-		WHEN wh.bWHO IN (1222) THEN  'WHO STAGE 3 PEDS'
-		WHEN wh.bWHO IN (1223) THEN  'WHO STAGE 4 PEDS'
-		WHEN wh.bWHO IN (1067) THEN  'UNKNOWN'
-		END AS bWHOStage,
-	   cd.CD4Count as bCD4Count,
-	   cd.CD4CountDate as bCD4CountDate,
-	   bm.Weight as LastWeight,
-	   bm.Height as LastHeight,
-	   bp.BP,
-  lvl.CurrVL as Latest_VL,
-  lvl.VLDate as Latest_VLDate,
-  -- if(ele.lab_test in (1305,856),(mid(max(concat(ele.visit_date, ele.order_reason)), 11)),null) as VLOrderUrgency,
-  CASE
-	 WHEN if(ele.lab_test in (1305,856),(mid(max(concat(ele.visit_date, ele.order_reason)), 11)),null) IN (161236) THEN 'Routine'
-	 WHEN if(ele.lab_test in (1305,856),(mid(max(concat(ele.visit_date, ele.order_reason)), 11)),null) IN (160032) THEN 'Failure of category I treatment'
-	 WHEN if(ele.lab_test in (1305,856),(mid(max(concat(ele.visit_date, ele.order_reason)), 11)),null) IN (843) THEN 'Regimen Failure'
-     WHEN if(ele.lab_test in (1305,856),(mid(max(concat(ele.visit_date, ele.order_reason)), 11)),null) IN (162080) THEN 'Initial'
-     WHEN if(ele.lab_test in (1305,856),(mid(max(concat(ele.visit_date, ele.order_reason)), 11)),null) IN (1259) THEN 'Change of Regimen'
-     WHEN if(ele.lab_test in (1305,856),(mid(max(concat(ele.visit_date, ele.order_reason)), 11)),null) IN (159882) THEN 'Breastfeeding'
-     WHEN if(ele.lab_test in (1305,856),(mid(max(concat(ele.visit_date, ele.order_reason)), 11)),null) IN (1434) THEN 'Currently Pregnant'
-	 ELSE if(ele.lab_test in (1305,856),(mid(max(concat(ele.visit_date, ele.order_reason)), 11)),null)
-   END as VLOrderReason,
-  tt.vl_seq as VL_Sequence,
-  CASE WHEN vl.TBResult IN ('Missing') THEN 'Missing' ELSE 'YES' END AS 'TBScreeningAtLastVisit',
-  CASE 
-	    WHEN vl.TBResult IN (1663) THEN 'TB RX Completed'
-	    WHEN vl.TBResult IN (142177) THEN 'Pr TB'
-	    WHEN vl.TBResult IN (1661) THEN 'TB Diagnosed'
-	    WHEN vl.TBResult IN (1660) THEN 'No TB'
-	    WHEN vl.TBResult IN (1662) THEN 'TB Rx'
-	    WHEN vl.TBResult IN (160737) THEN 'Not Done'
-	    ELSE 'Missing'
-	    END AS 'TBStatus',
-	tt.DCM_model,
-	ipt.iptstartdate as IPTStartdate,
-	CASE 
-		   WHEN ipt.iptstatus IN (112141) THEN 'DISCONTINUED'
-		   WHEN ipt.iptstatus IN (1267) THEN 'Completed'
-		   ELSE 'Missing'
-		   END As IPTCompletionstatus,
-	ipt.iptoutcomedate as IPTOutcomedate,
-	CASE 
-	   WHEN fp.fpmethod=5279 THEN 'Injectable contraceptives'
-	   WHEN fp.fpmethod=5278 THEN 'Diaphragm'
-	   WHEN fp.fpmethod=5275 THEN 'Intrauterine device'
-	   WHEN fp.fpmethod=5276 THEN 'Female sterilization'
-	   WHEN fp.fpmethod=190 THEN 'Condoms'
-	   WHEN fp.fpmethod=780 THEN 'Oral contraception'
-	   WHEN fp.fpmethod=5277 THEN 'Natural family planning'
-	   WHEN fp.fpmethod=159524 THEN 'Sexual abstinence'
-	   WHEN fp.fpmethod=78796 THEN 'LEVONORGESTREL'
-	   WHEN fp.fpmethod=1472 THEN 'Tubal ligation procedure'
-	   WHEN fp.fpmethod=907 THEN 'MEDROXYPROGESTERONE ACETATE'
-	   WHEN fp.fpmethod=1489 THEN 'Vasectomy'
-	   WHEN fp.fpmethod=1359 THEN 'NORPLANT (IMPLANTABLE CONTRACEPTIVE)'
-	   WHEN fp.fpmethod=136452 THEN 'IUD Contraception'
-	   WHEN fp.fpmethod=159837 THEN 'Hysterectomy'
-	   WHEN fp.fpmethod=160570 THEN 'Emergency contraceptive pills'
-	   WHEN fp.fpmethod=136163 THEN 'Lactational amenorrhea'
-	   WHEN fp.fpmethod=159589 THEN 'Implantable contraceptive (unspecified type)'
-	   WHEN fp.fpmethod=5622 THEN 'Other (specify)'
-	   ELSE 'Missing'
-	   END AS 'FPMethodatLastVisit',
-	CASE
-	   WHEN pg.pgstatus IN (1066) THEN 'No'
-	   WHEN pg.pgstatus IN (1065) THEN 'Yes'
-	   WHEN pg.pgstatus IN (1067) THEN 'Unknown'
-	   ELSE 'Missing'
-	   END AS 'PregnancyStatusatLastVisit',
-	CASE 
-           WHEN mid(max(concat(fup.visit_date,fup.wants_pregnancy)),11) IN (1066) THEN 'No'
-           WHEN mid(max(concat(fup.visit_date,fup.wants_pregnancy)),11) IN (1065) THEN 'Yes'
-           WHEN de.Gender IN('M') THEN 'NA'
-           ELSE 'Missing'
-         END AS 'Pregnancy intention assessment at last visit',
-	ov.OVCEnrolled as 'EnrolledInOVC',
-	ov.OVCEnrollmentdate,
-	ov.client_enrolled_cpims,
-	ov.caregiver_enrolled_here as CareGiverStatus,
-	ov.relationship_to_client as CareGiverRelationshipToClient,
-	ov.Paired as 'Paired Y/N',
-	eat.EADate as 'EAC sessions date seq',
-	tp.TPS_Date,
-	ot.OTZ_EnrolledmentDate,
-    max(date(d.visit_date)) as date_discontinued,
-    d.effective_disc_date,
-    cc.started_on_drugs,
-    Case
+		WHEN wh.cWHO IN (1221) THEN  'WHO STAGE 2 PEDS'
+		WHEN wh.cWHO IN (1222) THEN  'WHO STAGE 3 PEDS'
+		WHEN wh.cWHO IN (1223) THEN  'WHO STAGE 4 PEDS'
+		WHEN wh.cWHO IN (1067) THEN  'UNKNOWN'
+		END AS cWHOStage,
+ lvl.CurrVL as Latest_VL_result,
+ lvl.VLDate as Latest_VLDate,
+ ov.OVCEnrolled as 'EnrolledInOVC',
+ ov.OVCEnrollmentdate,
+ CPIMS_No as OVC_CPIMS_No,
+ ot.OTZ_EnrolledmentDate,
+ ipt.iptstartdate as IPTStartdate,
+ CASE 
+	WHEN ipt.iptstatus IN (112141) THEN 'DISCONTINUED'
+	WHEN ipt.iptstatus IN (1267) THEN 'Completed'
+	ELSE 'Missing'
+	END As IPTCompletionstatus,
+ ipt.iptoutcomedate as IPTOutcomedate,
+ mid(max(concat(fup.visit_date,fup.stability)),11) as Stability,
+ tt.DCM_model,
+ max(fup.visit_date) as LastVisitDate,
+ max(fup.refill_date) as RefillDate,
+ max(fup.next_appointment_date) as NextAppointment,
+ d.effective_disc_date,
+ cc.started_on_drugs,
+ CASE
        when cc.started_on_drugs is not null THEN 'Active'
        when d.discontinuation_reason=159492 THEN 'Transfer out'
        when d.discontinuation_reason=5240 THEN 'Lost to followup'
        when d.discontinuation_reason=160034 THEN 'Died'
        ELSE 'Others'
-       END AS 'ARTStatus'
+       END AS FinalOutcome,
+	max(date(d.visit_date)) as FinalOutcomeDate
 from kenyaemr_etl.etl_hiv_enrollment e
 inner join kenyaemr_etl.etl_patient_demographics de on e.patient_id=de.patient_id
 left outer join kenyaemr_etl.etl_current_in_care cc on e.patient_id = cc.patient_id
-left outer join kenyaemr_etl.etl_laboratory_extract ele on e.patient_id= ele.patient_id
 left outer join person_address pa on e.patient_id=pa.person_id
 left outer join(
 	SELECT 
@@ -312,7 +242,6 @@ SELECT
  MAX(IF(pit.name in('CPIMS Number'),pi.identifier,null)) AS CPIMS_No,
  p.gender AS Gender,
  CONCAT_WS(' ',pn.given_name,pn.middle_name,pn.family_name) AS Patient_Name
-
 FROM patient_identifier pi 
 INNER JOIN patient_identifier_type pit ON pi.identifier_type=pit.patient_identifier_type_id AND pit.retired=0 and pi.voided=0 
 INNER JOIN person p ON pi.patient_id=p.person_id AND p.voided=0

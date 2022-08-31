@@ -2,9 +2,13 @@ USE kenyaemr_etl;
 set @startDate='2022-04-01';
 set @endDate='2022-04-30';
 SELECT
- patient_id
-FROM kenyaemr_etl.etl_hts_test
-WHERE visit_date between @startDate and @endDate
+ eht.patient_id,
+ de.Gender,
+ DATE_FORMAT(FROM_DAYS(DATEDIFF(DATE(@endDate),de.DOB)), '%Y')+0 AS Age,
+ eht.key_population_type
+FROM kenyaemr_etl.etl_hts_test eht
+LEFT OUTER JOIN kenyaemr_etl.etl_patient_demographics de ON eht.patient_id=de.patient_id
+WHERE eht.visit_date between @startDate and @endDate
 AND population_type IN ('Key Population') AND final_test_result IN ('Negative')
 
 

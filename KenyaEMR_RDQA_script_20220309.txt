@@ -13,6 +13,7 @@ select
   ELSE 'Missing'
   END as 'Sex (Female/Male ELSE Missing)',
   date_format(cc.dob,'%d/%m/%Y') as 'Date of Birth (dd/mm/yyyy ELSE missing)',
+  DATE_FORMAT(FROM_DAYS(DATEDIFF(cc.latest_vis_date,cc.dob)), '%Y')+0 AS AgeatLastVisit,
   date_format(ee.date_confirmed_hiv_positive,'%d/%m/%Y') as 'Date Confirmed HIV Positive',
   date_format(cc.enroll_date,'%d/%m/%Y') as 'Date Enrolled in HIV Care (dd/mm/yyyy)',
   date_format(min(dr.date_started),'%d/%m/%Y') as 'Date of ART initiation (dd/mm/yyyy)',
@@ -82,3 +83,5 @@ Date_format(SUBSTRING_INDEX(SUBSTRING_INDEX(GROUP_CONCAT(IF(le.lab_test in ('856
 from kenyaemr_etl.etl_laboratory_extract le
 group by le.patient_id ) as le ON cc.patient_id=le.patient_id
 group by patient_id
+order by rand()
+limit 50

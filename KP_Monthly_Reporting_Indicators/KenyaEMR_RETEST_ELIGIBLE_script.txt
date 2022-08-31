@@ -2,12 +2,17 @@ use kenyaemr_etl;
 set @endDate='2022-04-30';
 set @startDate='2022-04-01';
 select
- ecv.client_id,
- epf.patient_id
+  ecv.client_id,
+  ec.unique_identifier,
+  de.Gender,
+  DATE_FORMAT(FROM_DAYS(DATEDIFF(DATE(@endDate),de.DOB)), '%Y')+0 AS Age,
+  ec.key_population_type
 from kenyaemr_etl.etl_clinical_visit ecv
+left outer join kenyaemr_etl.etl_contact ec ON ecv.client_id=ec.client_id
+left outer join kenyaemr_etl.etl_patient_demographics de ON ecv.client_id=de.patient_id
 left outer join (
 select
-epf.patient_id
+  epf.patient_id
 from kenyaemr_etl.etl_prep_followup epf
 where epf.appointment_date between @startDate and @endDate
 ) as epf on ecv.client_id=epf.patient_id

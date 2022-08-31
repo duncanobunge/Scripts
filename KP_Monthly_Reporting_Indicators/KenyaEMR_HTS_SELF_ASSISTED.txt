@@ -5,11 +5,16 @@ SELECT
  e.patient_id,
  e.encounter_datetime,
  o.concept_id,
+ de.Gender,
+ DATE_FORMAT(FROM_DAYS(DATEDIFF(DATE(@endDate),de.DOB)), '%Y')+0 AS Age,
+ ec.key_population_type,
  count(o.concept_id)
 FROM openmrs.encounter e
 inner join openmrs.obs o ON e.patient_id=o.person_id
+left outer join kenyaemr_etl.etl_contact ec ON e.patient_id=ec.client_id
+left outer join kenyaemr_etl.etl_patient_demographics de ON e.patient_id=de.patient_id
 where e.form_id=102 and e.encounter_type=79 and o.concept_id=165221
-and date(encounter_datetime) between @startDate and @endDate
+and date(encounter_datetime) between @startDate and @endDate and ec.key_population_type <>''
 group by e.patient_id;
 
 

@@ -3,14 +3,23 @@ set @startDate='2022-04-01';
 set @endDate='2022-04-30';
 SELECT
  eht.patient_id,
- ecv.client_id,
- epe.patient_id,
+ -- ecv.client_id,
+ -- epe.patient_id,
  ecv.prep_screened,
  ecv.prep_results,
  epe.patient_type,
- epe.population_type,
- epe.kp_type
+ -- epe.population_type,
+ de.Gender,
+  DATE_FORMAT(FROM_DAYS(DATEDIFF(max(epe.visit_date),de.DOB)), '%Y')+0 AS Age,
+  CASE epe.kp_type
+       WHEN 160578 THEN 'MSM'
+       WHEN 160579 THEN 'FSW'
+       WHEN 165090 THEN 'PWID'
+       ELSE 'Missing'
+       END AS kp_type
+ 
 FROM kenyaemr_etl.etl_hts_test eht
+LEFT OUTER JOIN kenyaemr_etl.etl_patient_demographics de ON eht.patient_id=de.patient_id
 LEFT OUTER JOIN(
   SELECT
    ecv.client_id,
@@ -24,6 +33,7 @@ LEFT OUTER JOIN(
    SELECT
 	 patient_id,
 	 patient_type,
+     visit_date,
 	 population_type,
 	 kp_type
 FROM kenyaemr_etl.etl_prep_enrolment  

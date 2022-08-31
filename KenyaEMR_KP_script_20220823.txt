@@ -8,6 +8,7 @@ select
  epd.marital_status,
 pa.county_district as County,
 pa.state_province as Sub_county,
+pa.address4 as Ward,
 pa.address6 as Location,
 pa.address5 as Sub_location,
 pa.city_village as Village,
@@ -92,4 +93,3 @@ kenyaemr_etl.etl_default_facility_info edfi
 where epp.program in ('KP')
 group by
 epp.patient_id
-
