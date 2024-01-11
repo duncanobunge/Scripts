@@ -1,0 +1,14 @@
+USE openmrs;
+SELECT
+  epe.patient_id,
+  epe.patient_type,
+  pi.identifier,
+  epe.population_type,
+  epe.kp_type,
+  MAX(epf.appointment_date) AS nextTca,
+  DATEDIFF(CURDATE(),MAX(epf.appointment_date)) AS DaysDefaultedPills
+FROM kenyaemr_etl.etl_prep_enrolment epe
+LEFT OUTER JOIN kenyaemr_etl.etl_prep_followup epf ON epe.patient_id=epf.patient_id
+LEFT OUTER JOIN openmrs.patient_identifier pi ON epe.patient_id = pi.patient_id AND pi.identifier_type=16
+GROUP BY epe.patient_id
+HAVING DaysDefaultedPills>=1

@@ -1,0 +1,66 @@
+USE openmrs;
+SELECT
+	  cc.patient_id,
+	  de.unique_patient_no as 'UniquePatientID',
+	  date_format(cc.dob,'%d-%m-%Y') as 'DOB',
+	  DATE_FORMAT(FROM_DAYS(DATEDIFF(cc.latest_vis_date,cc.dob)), '%Y')+0 AS AgeatLastVisit,
+	  CASE
+	  WHEN cc.Gender ='F' THEN 'F'
+	  WHEN  cc.Gender ='M' THEN 'M' 
+	  ELSE 'Missing'
+	  END as 'Sex',
+      ee.date_confirmed_hiv_positive,
+      ee.date_first_enrolled_in_care,
+      DATEDIFF(ee.date_first_enrolled_in_care,ee.date_confirmed_hiv_positive)as DaysToLinkage,
+	  date_format(cc.latest_vis_date,'%d-%m-%Y') as 'DateLastAppointment',
+	  date_format(cc.latest_tca,'%d-%m-%Y') as 'DateNextAppointment',
+	  mid(max(concat(fup.visit_date, fup.weight)), 11) as 'Weight(kg)',
+	  mid(max(concat(fup.visit_date, fup.height)), 11) as 'Height(cm)',
+	  min(dr.date_started) as StartARTDate,
+	  mid(min(concat(dr.date_started, dr.regimen_name)), 11)as StartARTRegimen,
+	  mid(min(concat(dr.date_started, dr.regimen_line)), 11)as StartARTRegimenLine,
+	  max(dr.date_started) as CurrentARTStartDate,
+	  mid(max(concat(dr.date_started, dr.regimen_name)), 11) as CurrentARTRegimen,
+	  mid(max(concat(dr.date_started, dr.regimen_line)), 11)as CurrentARTRegimenLine,
+      tt.vl_seq as VL_Sequence,
+	  -- lee.VLLatestResult,
+	  -- lee.LatestVLDate,
+	  max(date(le.date_created)) as LatestVLDate
+FROM kenyaemr_etl.etl_current_in_care cc
+inner join kenyaemr_etl.etl_drug_event dr ON cc.patient_id = dr.patient_id
+inner join kenyaemr_etl.etl_patient_hiv_followup fup on cc.patient_id= fup.patient_id
+inner join kenyaemr_etl.etl_patient_demographics de on cc.patient_id = de.patient_id
+inner join kenyaemr_etl.etl_hiv_enrollment ee on cc.patient_id = ee.patient_id
+LEFT OUTER JOIN  kenyaemr_etl.etl_laboratory_extract le on cc.patient_id = le.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_ipt_outcome on cc.patient_id =  kenyaemr_etl.etl_ipt_outcome.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_ipt_initiation ON cc.patient_id = kenyaemr_etl.etl_ipt_initiation.patient_id
+left outer join(
+select
+  t.person_id,
+  t.vldate,
+  t.vlresult,
+  t.DCM_model,
+  group_concat(if(t.vlresult is not null,concat_ws(':',t.vlresult, t.vldate),null) order by t.vldate separator '|') as vl_seq
+from (
+select
+   o.person_id,
+   p.gender,
+    CASE
+    WHEN o.concept_id=164947 and o.value_coded=164942 THEN 'Standard Care'
+    WHEN o.concept_id=164947 and o.value_coded=164943 THEN 'Fast Track care'
+    WHEN o.concept_id=164947 and o.value_coded=164944 THEN 'Community ART distribution - HCW led'
+    WHEN o.concept_id=164947 and o.value_coded=164945 THEN 'Community ART distribution – Peer led'
+    WHEN o.concept_id=164947 and o.value_coded=164946 THEN 'Facility ART distribution group'
+    END AS 'DCM_model',
+   CASE
+     WHEN o.concept_id=856 THEN CAST(o.value_numeric AS CHAR)
+     WHEN o.concept_id=1305 AND o.value_coded =1302 THEN 'LDL'
+     END AS vlresult,
+     date(o.obs_datetime) as vldate
+from openmrs.obs o 
+inner join openmrs.encounter e on o.person_id = e.patient_id
+inner join openmrs.person p on o.person_id=p.person_id
+where o.concept_id in (856,1305,164947)
+group by o.person_id,vldate)t
+group by t.person_id) tt on cc.patient_id = tt.person_id
+group by patient_id

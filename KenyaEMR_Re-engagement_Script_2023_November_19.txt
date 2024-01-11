@@ -1,0 +1,137 @@
+-- INSTRUCTIONS-----
+-- DEFINITION: TX_RTT: This is a quarterly indicator and the query should output a list list of those patient who experienced an interruption before 
+-- the reporting period, came back to treatment in the reporting period and were able to stay in treatment up to the end of the reporting period.
+-- Replace :startDate and :endDate with the correct reporting period Dates eg replace :startDate with '2020-10-01' and :endDate with '2020-12-31'
+
+use openmrs;
+
+SET @Start_Date='2017-01-01' ;
+SET @End_Date = '2021-12-31' ;
+
+SELECT patient_id, FACES_ID,UPN,Patient_Name,gender As Sex,DoB,Age,ART_Start_Date,LastVisit as LastEncDatePriorITT,
+PrevTCA as LastTCAPriorITT,date_add(PrevTCA, interval 31 day) as ITTAcquisitionDate,
+LastEncAfterIIT,Next_Appointment AS LastTCAAfterITT  
+FROM(
+SELECT en.encounter_id,e.patient_id,
+FACES_ID,UPN,Patient_Name,gender,DoB,Age,ART_Start_Date,
+MAX(date(e.encounter_datetime)) as LastVisit,
+SUBSTRING_INDEX(GROUP_CONCAT(DATE(o.value_datetime) ORDER BY DATE(e.encounter_datetime) DESC,e.date_created DESC SEPARATOR '| '),'|',1) AS  PrevTCA,
+tca.TCA as Next_Appointment, 
+tca.Last_Enc AS LastEncAfterIIT,
+FormName,encounter_date,GivenTCA,Effective_Discontinuation_Date  
+FROM encounter e 
+INNER JOIN obs o ON e.encounter_id=o.encounter_id AND o.voided=0 and o.concept_id in(5096,162549) 
+INNER JOIN encounter_type et ON e.encounter_type=et.encounter_type_id 
+ AND et.name IN('HIV Enrollment','HIV Consultation','ART Refill') 
+and et.retired=0 
+INNER JOIN(
+SELECT 
+e.patient_id AS patient_id,
+    MAX(IF(pit.name in('Unique Patient Number'),pi.identifier,null)) AS UPN,
+MAX(IF(pit.name in('Patient Clinic Number'),pi.identifier,null)) AS FACES_ID,
+    CONCAT_WS(' ',pn.given_name, pn.middle_name, pn.family_name) AS Patient_Name,
+    	p.gender, 
+    	DATE(p.birthdate) AS DoB,
+DATEDIFF(DATE(@End_Date),p.birthdate) DIV 365.25 AS Age
+
+FROM encounter e
+INNER JOIN patient_identifier `pi` ON pi.patient_id = e.patient_id 
+INNER JOIN patient_identifier_type pit ON pi.identifier_type=pit.patient_identifier_type_id AND pit.retired=0 and pi.voided=0 
+AND pi.voided=0 AND e.voided=0 
+AND DATE(e.encounter_datetime) <= DATE(@End_Date) 
+INNER JOIN encounter_type et ON e.encounter_type=et.encounter_type_id 
+ AND et.name IN('HIV Enrollment','HIV Consultation','ART Refill') 
+and et.retired=0 
+INNER JOIN person p ON p.person_id = e.patient_id AND p.voided = 0
+INNER JOIN person_name pn ON e.patient_id=pn.person_id AND pn.voided = 0 
+group by e.patient_id
+)pat ON e.patient_id=pat.patient_id
+INNER JOIN(
+  SELECT  
+  e.patient_id,
+COALESCE(MIN(IF(o.concept_id in(159599),DATE(o.value_datetime),NULL)),
+IF(o.concept_id IN(160540) AND o.value_coded IN(5622,159937,159938,160536,160537,160538,160539,160541,160542,160544,160631,162050,162223,160563),MIN(DATE(e.encounter_datetime)),NULL)
+) AS ART_Start_Date
+
+    FROM encounter e 
+INNER JOIN obs o ON o.encounter_id=e.encounter_id AND o.voided=0 AND o.concept_id IN (159599,160540) 
+AND e.voided=0 
+group by e.patient_id  
+) art ON e.patient_id=art.patient_id
+INNER JOIN (
+SELECT e.encounter_id,e.patient_id,
+GROUP_CONCAT(f.name SEPARATOR ',') AS FormName,
+date(e.encounter_datetime) as encounter_date,
+date(o.value_datetime) as GivenTCA
+FROM encounter e 
+inner join encounter_type et ON e.encounter_type=et.encounter_type_id AND e.voided=0  
+AND et.name IN('HIV Enrollment','HIV Consultation','ART Refill') and et.retired=0 
+INNER JOIN form f ON e.form_id=f.form_id 
+INNER JOIN obs o ON e.encounter_id=o.encounter_id AND o.voided=0 and o.concept_id in(5096,162549) 
+WHERE encounter_datetime between date(@Start_Date) and date(@End_Date) 
+group by e.patient_id,encounter_date 
+order by e.patient_id,e.encounter_id ASC 
+) en on  e.patient_id=en.patient_id 
+INNER JOIN(
+select e.patient_id,max(date(e.encounter_datetime)) as Last_Enc, 
+SUBSTRING_INDEX(GROUP_CONCAT(DATE(o.value_datetime) ORDER BY DATE(e.encounter_datetime) DESC,e.date_created DESC SEPARATOR '| '),'|',1) AS  TCA 
+FROM encounter e 
+INNER JOIN obs o ON e.encounter_id=o.encounter_id and e.voided=0 and o.voided=0 and date(e.encounter_datetime)<=date(@End_Date) 
+and o.concept_id in(5096,162549)  
+INNER JOIN encounter_type et ON e.encounter_type=et.encounter_type_id 
+ AND et.name IN('HIV Enrollment','HIV Consultation','ART Refill') and et.retired=0
+group by e.patient_id 
+HAVING DATE_ADD(TCA, INTERVAL 31 DAY)>=(@End_Date)
+) tca on e.patient_id=tca.patient_id 
+
+
+LEFT JOIN(
+SELECT DISTINCT(e.patient_id) AS patient_id,
+MAX(IF(o.concept_id in(161555) AND o.value_coded in(159492),true,NULL)) AS is_TO,
+MAX(IF(o.concept_id in(160649),DATE(o.value_datetime),NULL)) AS Date_TO,
+MAX(IF(o.concept_id in(164384),DATE(o.value_datetime),NULL)) AS Effective_Discontinuation_Date,
+MAX(IF(o.concept_id in(164133),DATE(o.value_datetime),NULL)) AS Date_Discontinuation_Verified,
+CASE  
+when o.concept_id in(1285) AND o.value_coded=1065 THEN 'Yes'  
+when o.concept_id in(1285) AND o.value_coded=1066 THEN 'No' 
+else null END AS Transfer_Out_Verified,
+MAX(Date(e.encounter_datetime)) AS LastEncounter,
+All_LastEncounter
+FROM obs o
+INNER JOIN 
+encounter e ON o.encounter_id=e.encounter_id 
+-- AND DATE(e.encounter_datetime)<=DATE(@endDate) 
+and e.voided=0 and o.voided=0
+AND o.concept_id IN (160649,164384,1285,161555,164133)
+INNER JOIN encounter_type et ON e.encounter_type=et.encounter_type_id AND et.name in('HIV Discontinuation')
+INNER JOIN (
+SELECT e.patient_id AS patient_id,MAX(DATE(e.encounter_datetime)) AS All_LastEncounter 
+FROM encounter e 
+WHERE 
+-- DATE(e.encounter_datetime) <= DATE(@endDate) and 
+e.voided=0 
+GROUP BY patient_id
+) AS enc ON e.patient_id=enc.patient_id
+ group by patient_id 
+HAVING LastEncounter>=All_LastEncounter  
+and is_TO=1 
+AND Transfer_Out_Verified="yes" 
+AND Effective_Discontinuation_Date<=DATE(@End_Date)
+) AS t_o on e.patient_id=t_o.patient_id
+
+WHERE DATE(e.encounter_datetime)<en.encounter_date and 
+e.patient_id not in(
+  -- EXCLUDE ALL DEATHS      
+SELECT DISTINCT(o.person_id) AS patient_id 
+FROM obs o
+JOIN 
+encounter e ON o.encounter_id=e.encounter_id AND DATE(e.encounter_datetime)<=DATE(@endDate) and e.voided=0 and o.voided=0
+AND o.concept_id IN (1543) 
+ AND DATE(o.value_datetime) IS NOT NULL 
+)
+group by en.patient_id,en.encounter_id 
+HAVING DATEDIFF(DATE(encounter_date),DATE(PrevTCA))>30 AND date_add(date(Next_Appointment), interval 30 day)>= @End_Date 
+ AND (Effective_Discontinuation_Date IS NULL OR !(Effective_Discontinuation_Date BETWEEN LastVisit AND LastEncAfterIIT))
+) AS TX_RTT 
+HAVING  ART_Start_Date between @Start_Date and @End_Date
+

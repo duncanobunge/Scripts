@@ -1,0 +1,96 @@
+-- railways & KCRH  -OPENMRSID - 6 & 4
+use openmrs;
+select
+   edfi.FacilityName,
+   edfi.siteCode,
+   p.patient_id,
+   r.person_a,
+   if(p.identifier_type=3, p.identifier,null)as OpenmrsId,
+   pp.HEINumber,
+   epd.DOB,
+   epd.Gender,
+   DATE_FORMAT(FROM_DAYS(DATEDIFF(max(ehfuv.visit_date),epd.DOB)), '%Y')+0 AS AgeatLastVisit,
+   min(ehe.visit_date) as HEI_EnrollmentDate,
+   mid(min(concat(ehe.visit_date,ehe.mode_of_delivery)),11) as ModeOfDelivery,
+   mid(min(concat(ehe.visit_date,ehe.mother_on_art_at_infant_enrollment)),11) as MotherARTStatusHEI_Enrollment,
+   pid.CCCNumber as ParentCCCNumber, 
+   CASE 
+      WHEN r.relationship IN (3) THEN 'Parent_Child'
+      ELSE 'Others'
+      END AS 'RelationshipType',
+   CASE
+     WHEN mid(max(concat(ehe.visit_date,ehe.mother_breastfeeding)),11)=1065 THEN 'Yes'
+     WHEN mid(max(concat(ehe.visit_date,ehe.mother_breastfeeding)),11)=1066 THEN 'No'
+     END as MotherBreastFeedingStatus,
+   CASE
+     WHEN mid(max(concat(ehe.visit_date, ehe.mother_alive)),11) IN(1) THEN 'Yes'
+     ELSE mid(max(concat(ehe.visit_date, ehe.mother_alive)),11) IN(1)
+     END as MotherAlive,
+   CASE
+     WHEN mid(max(concat(ehe.visit_date,ehe.mother_on_art_at_infant_enrollment)),11)=1065 THEN 'Yes'
+     WHEN mid(max(concat(ehe.visit_date,ehe.mother_on_art_at_infant_enrollment)),11)=1066 THEN 'No'
+     END AS MotheronARTStatus,
+
+   max(ehfuv.visit_date) as LatestVisitDate,
+   mid(max(concat(ehfuv.visit_date, ehfuv.weight)),11) as LatestWeight,
+   mid(max(concat(ehfuv.visit_date, ehfuv.height)),11) as LatestHeight,
+   CASE
+     WHEN mid(max(concat(ehfuv.visit_date, ehfuv.muac)),11) IN(127778) THEN 'Red'
+     WHEN mid(max(concat(ehfuv.visit_date, ehfuv.muac)),11) IN(160910) THEN 'Yellow'
+     WHEN mid(max(concat(ehfuv.visit_date, ehfuv.muac)),11) IN(160909) THEN 'Green'
+     WHEN mid(max(concat(ehfuv.visit_date, ehfuv.muac)),11) IN(1067) THEN 'Unknown'
+     END as LatestMUAC,
+   mid(min(concat(ehfuv.visit_date, ehfuv.weight)),11) as InitialWeight,
+   mid(min(concat(ehfuv.visit_date, ehfuv.height)),11) as InitialHeight,
+   CASE 
+	 WHEN mid(min(concat(ehfuv.visit_date, ehfuv.muac)),11) IN(127778) THEN 'Red'
+     WHEN mid(min(concat(ehfuv.visit_date, ehfuv.muac)),11) IN(160910) THEN 'Yellow'
+     WHEN mid(min(concat(ehfuv.visit_date, ehfuv.muac)),11) IN(160909) THEN 'Green'
+     WHEN mid(min(concat(ehfuv.visit_date, ehfuv.muac)),11) IN(1067) THEN 'Unknown'
+     END as InitialMUAC,
+   CASE
+     WHEN  mid(max(concat(ehfuv.visit_date, ehfuv.primary_caregiver)),11) IN (970) THEN 'Mother'
+     ELSE  mid(max(concat(ehfuv.visit_date, ehfuv.primary_caregiver)),11) 
+     END as PrimaryCareGiver,
+   mid(max(concat(ehfuv.visit_date, ehfuv.followup_type)),11) as HEIFollowUpType,
+   mid(min(concat(ehfuv.visit_date, ehfuv.dna_pcr_sample_date)),11) as InitialDNAPCRSampleDate,
+   mid(min(concat(ehfuv.visit_date, ehfuv.dna_pcr_result)),11) as InitialDNAPCRResult,
+   mid(min(concat(ehfuv.visit_date, ehfuv.dna_pcr_results_date)),11) as InitialDNAPCRResultDate,
+   mid(max(concat(ehfuv.visit_date, ehfuv.dna_pcr_sample_date)),11) as LatestDNAPCRSampleDate,
+   mid(max(concat(ehfuv.visit_date, ehfuv.dna_pcr_result)),11) as LatestDNAPCRResult,
+   mid(max(concat(ehfuv.visit_date, ehfuv.dna_pcr_results_date)),11) as LatestDNAPCRResultDate,
+   mid(max(concat(ehfuv.visit_date, ehfuv.azt_given)),11) as AZTgiven,
+   mid(max(concat(ehfuv.visit_date, ehfuv.nvp_given)),11) as NVPgiven,
+   mid(max(concat(ehfuv.visit_date, ehfuv.ctx_given)),11) as CTXgiven,
+   mid(max(concat(ehfuv.visit_date, ehfuv.first_antibody_sample_date)),11) as FirstAntibodySampleDate,
+   mid(max(concat(ehfuv.visit_date, ehfuv.first_antibody_result)),11) as FirstAntibodyResult,
+   mid(max(concat(ehfuv.visit_date, ehfuv.first_antibody_result_date)),11) as FirstAntibodyResultDate,
+   mid(max(concat(ehfuv.visit_date, ehfuv.final_antibody_sample_date)),11) as FinalAntibodySampleDate,
+   mid(max(concat(ehfuv.visit_date, ehfuv.final_antibody_result)),11) as FinalAntibodyTestResult,
+   mid(max(concat(ehfuv.visit_date, ehfuv.final_antibody_result_date)),11) as FinalAntibodyTestResultDate,
+   mid(max(concat(ehfuv.visit_date,ehfuv.pupil_examination)),11) as LatestPupilExamination,
+   mid(max(concat(ehfuv.visit_date,ehfuv.next_appointment_date)),11) as NextTCA
+from patient_identifier p
+INNER JOIN(
+	select
+	    pi.patient_id,
+	    if(pi.identifier_type=7, pi.identifier,null)as HEINumber
+	from patient_identifier pi
+	where pi.identifier_type in (7)	
+	group by pi.patient_id) pp ON p.patient_id = pp.patient_id
+INNER JOIN openmrs.relationship r ON p.patient_id=r.person_b 
+LEFT OUTER JOIN (
+    select
+	    pi.patient_id,
+	    if(pi.identifier_type=6, pi.identifier,null)as CCCNumber
+	from patient_identifier pi
+	where pi.identifier_type in (6)	
+	group by pi.patient_id
+  )AS pid ON r.person_a = pid.patient_id 
+LEFT OUTER JOIN kenyaemr_etl.etl_hei_enrollment ehe ON p.patient_id = ehe.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_hei_follow_up_visit ehfuv ON p.patient_id = ehfuv.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_patient_demographics epd ON ehe.patient_id = epd.patient_id,
+kenyaemr_etl.etl_default_facility_info edfi
+where p.identifier_type in (3)
+group by p.patient_id
+

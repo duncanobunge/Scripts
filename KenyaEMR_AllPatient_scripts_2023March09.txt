@@ -249,6 +249,12 @@ pa.address2 as Landmark,
 	   ELSE 'Missing'
 	   END AS 'PregnancyStatusatLastVisit',
 	CASE 
+           WHEN mid(max(concat(fup.visit_date,fup.breastfeeding)),11) IN (1066) THEN 'No'
+           WHEN mid(max(concat(fup.visit_date,fup.breastfeeding)),11) IN (1065) THEN 'Yes'
+           WHEN de.Gender IN('M') THEN 'NA'
+           ELSE 'Missing'
+         END AS 'BreastFeedingStatusAtLastVisit',
+	CASE 
            WHEN mid(max(concat(fup.visit_date,fup.wants_pregnancy)),11) IN (1066) THEN 'No'
            WHEN mid(max(concat(fup.visit_date,fup.wants_pregnancy)),11) IN (1065) THEN 'Yes'
            WHEN de.Gender IN('M') THEN 'NA'

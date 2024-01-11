@@ -154,6 +154,7 @@ pa.address2 as Landmark,
             WHEN mid(max(concat(eds.visit_date, eds.PHQ_9_rating)), 11)=134017 THEN 'Moderate Major Depression'
             WHEN mid(max(concat(eds.visit_date, eds.PHQ_9_rating)), 11)=126627 THEN 'Severe Depression'
             WHEN mid(max(concat(eds.visit_date, eds.PHQ_9_rating)), 11)=134011 THEN 'Moderate Recurrent Major Depression'
+			WHEN mid(max(concat(eds.visit_date, eds.PHQ_9_rating)), 11)=1115 THEN 'Normal'
             ELSE 'Missing'
         END as PHQ9Rating,
 	  ph9.phq9_seq,
@@ -248,6 +249,12 @@ pa.address2 as Landmark,
 	   WHEN pg.pgstatus IN (1067) THEN 'Unknown'
 	   ELSE 'Missing'
 	   END AS 'PregnancyStatusatLastVisit',
+	CASE 
+           WHEN mid(max(concat(fup.visit_date,fup.breastfeeding)),11) IN (1066) THEN 'No'
+           WHEN mid(max(concat(fup.visit_date,fup.breastfeeding)),11) IN (1065) THEN 'Yes'
+           WHEN de.Gender IN('M') THEN 'NA'
+           ELSE 'Missing'
+         END AS 'BreastFeedingStatusAtLastVisit',
 	CASE 
            WHEN mid(max(concat(fup.visit_date,fup.wants_pregnancy)),11) IN (1066) THEN 'No'
            WHEN mid(max(concat(fup.visit_date,fup.wants_pregnancy)),11) IN (1065) THEN 'Yes'

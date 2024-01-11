@@ -1,0 +1,105 @@
+USE openmrs;
+SELECT
+    pa.county_district as County,
+	pa.state_province as Sub_county,
+	pa.address6 as Location,
+	pa.address5 as Sub_location,
+	pa.city_village as Village,
+	pa.address2 as Landmark,
+    edfi.FacilityName,
+    edfi.siteCode,
+    epd.DOB,
+    DATE_FORMAT(FROM_DAYS(DATEDIFF(max(emav.visit_date),epd.DOB)), '%Y')+0 AS AgeatLastVisit,
+    epd.Gender,
+    epd.marital_status,
+    epd.national_unique_patient_identifier,
+    epd.education_level,
+    epd.occupation,
+    epd.unique_patient_no,
+  eme.patient_id,
+  CASE
+    WHEN mid(max(concat(eme.visit_date,eme.service_type)),11) IN (1622) THEN 'ANC'
+    ELSE mid(max(concat(eme.visit_date,eme.service_type)),11)
+    END AS serviceType,
+  eme.anc_number,
+  eme.first_anc_visit_date,
+  eme.age_at_menarche,
+  eme.lmp,
+  eme.edd_ultrasound,
+  CASE
+    WHEN mid(max(concat(eme.visit_date,eme.hiv_status)),11) IN (664) THEN 'Negative'
+    WHEN mid(max(concat(eme.visit_date,eme.hiv_status)),11) IN (1067) THEN 'Unknown'
+    WHEN mid(max(concat(eme.visit_date,eme.hiv_status)),11) IN (703) THEN  'Positive'
+    ELSE mid(max(concat(eme.visit_date,eme.hiv_status)),11) 
+    END AS 'hivStatus',
+  max(eme.hiv_test_date),
+  eme.partner_hiv_status,
+  CASE
+    WHEN mid(max(concat(eme.visit_date,eme.partner_hiv_status)),11) IN (664) THEN 'Negative'
+    WHEN mid(max(concat(eme.visit_date,eme.partner_hiv_status)),11) IN (1067) THEN 'Unknown'
+    WHEN mid(max(concat(eme.visit_date,eme.partner_hiv_status)),11) IN (703) THEN  'Positive'
+    ELSE mid(max(concat(eme.visit_date,eme.partner_hiv_status)),11) 
+    END AS 'PartnerHivStatus',
+  max(eme.partner_hiv_test_date),
+  -- emav.patient_id,
+  emav.anc_visit_number,
+   CASE
+    WHEN mid(max(concat(emav.visit_date,emav.breast_exam_done)),11) IN (1066) THEN 'No'
+    WHEN mid(max(concat(emav.visit_date,emav.breast_exam_done)),11) IN (1065) THEN 'Yes'
+    ELSE mid(max(concat(emav.visit_date,emav.breast_exam_done)),11) 
+    END AS 'BreastExamDone',
+    
+CASE
+    WHEN mid(max(concat(emav.visit_date,emav.pallor)),11) IN (1066) THEN 'No'
+    WHEN mid(max(concat(emav.visit_date,emav.pallor)),11) IN (1065) THEN 'Yes'
+    ELSE mid(max(concat(emav.visit_date,emav.pallor)),11) 
+    END AS 'Pallor',
+    mid(max(concat(emav.visit_date,emav.maturity)),11) as Maturity,
+	mid(max(concat(emav.visit_date,emav.fundal_height)),11) as FundalHeight, 
+     
+  emav.fetal_presentation,
+  emav.fetal_heart_rate,
+  emav.fetal_movement,
+  emav.lie,
+  emav.test_1_result,
+  emav.test_2_result,
+  emav.final_test_result,
+  emav.patient_given_result,
+  emav.partner_hiv_status,
+  emav.prophylaxis_given,
+  emav.anc_exercises,
+  emav.tb_screening,
+  emav.cacx_screening,
+  emav.counselled,
+  emav.counselled,
+  emav.counselled_on_breast_care,
+  emav.counselled_on_family_planning,
+  emav.counselled_on_supplimental_feeding,
+  emav.counselled_on_infant_feeding,
+  emav.next_appointment_date,
+  emd.patient_id,
+  emd.visit_date,
+  emd.admission_number,
+  emd.duration_of_pregnancy,
+  emd.mode_of_delivery,
+  emd.date_of_delivery,
+  emd.condition_of_mother,
+  emd.delivery_outcome,
+  emd.place_of_delivery,
+  emd.delivery_complications,
+  emd.prophylaxis_given,
+  emd.baby_azt_dispensed,
+  emd.baby_nvp_dispensed,
+  min(empv.visit_date) as DateStartedPNC,
+  max(empv.visit_date) as LatestPNCDate,
+  empv.pnc_register_no,
+  mid(max(concat(empv.visit_date,empv.pnc_visit_no)),11) as LatestPNCVisitNum,
+  max(empv.appointment_date) as NextPNCvisitDate
+FROM kenyaemr_etl.etl_mch_enrollment eme
+LEFT OUTER JOIN kenyaemr_etl.etl_mch_antenatal_visit emav ON eme.patient_id=emav.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_mch_postnatal_visit empv ON eme.patient_id=empv.patient_id
+INNER JOIN kenyaemr_etl.etl_patient_demographics epd ON eme.patient_id=epd.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_mchs_delivery emd ON eme.patient_id=emd.patient_id
+LEFT OUTER JOIN person_address pa on eme.patient_id=pa.person_id,
+kenyaemr_etl.etl_default_facility_info edfi
+GROUP BY eme.patient_id

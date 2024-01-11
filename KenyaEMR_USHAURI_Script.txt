@@ -1,0 +1,27 @@
+use openmrs;
+SELECT 
+     ecic.patient_id,
+     edfi.siteCode,
+	 edfi.FacilityName as SiteName,
+	 pa.county_district as County,
+	 pa.state_province as Sub_county,
+	 pa.address6 as Location,
+	 pa.address5 as Sub_location,
+	 pa.city_village as Village,
+	 pa.address2 as Landmark,
+     epd.phone_number,
+     epd.unique_patient_no,
+     max(ecic.visit_date) as VisitDatePre,
+     ecic.dob,
+     ecic.Gender,
+     epd.marital_status,
+     ephf.next_appointment_date,
+	 ephf.appointment_consent,
+     ephf.next_appointment_reason
+FROM kenyaemr_etl.etl_current_in_care ecic
+INNER JOIN kenyaemr_etl.etl_patient_demographics epd  ON  ecic.patient_id = epd.patient_id
+INNER JOIN kenyaemr_etl.etl_patient_hiv_followup ephf ON  ecic.patient_id = ephf.patient_id
+LEFT OUTER JOIN person_address pa on ecic.patient_id=pa.person_id,
+kenyaemr_etl.etl_default_facility_info edfi
+WHERE ecic.visit_date  BETWEEN '2022-12-01' AND '2023-06-30'
+GROUP BY ecic.patient_id

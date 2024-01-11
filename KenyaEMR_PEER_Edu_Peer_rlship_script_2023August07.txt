@@ -1,0 +1,32 @@
+USE openmrs;
+SELECT
+   epd.patient_id,
+   epd.DOB,
+   epd.Gender,
+   epd.marital_status,
+   epd.occupation,
+   epd.openmrs_id,
+   pr.PeerEducatorID,
+   pr.PeerID
+FROM kenyaemr_etl.etl_patient_demographics epd 
+LEFT OUTER JOIN (
+SELECT 
+	edfi.FacilityName,
+    edfi.siteCode,
+    if(pi.identifier_type=3, pi.identifier,null) as PeerEducatorID,
+    r.person_a,
+    pe.PeerID
+FROM openmrs.relationship r
+inner join openmrs.patient_identifier pi ON r.person_a=pi.patient_id AND pi.identifier_type IN(3)
+LEFT outer JOIN (
+SELECT 
+    if(pi.identifier_type=3, pi.identifier,null) as PeerID,
+    r.person_b
+FROM openmrs.relationship r
+inner join openmrs.patient_identifier pi ON r.person_b=pi.patient_id AND pi.identifier_type IN(3)
+where r.relationship=11)as pe ON r.person_b = pe.person_b
+left outer join openmrs.encounter ee ON r.person_a=ee.patient_id,
+kenyaemr_etl.etl_default_facility_info edfi
+where r.relationship=11
+group by PeerEducatorID) as pr ON epd.patient_id = pr.person_a
+GROUP BY epd.patient_id;

@@ -1,0 +1,48 @@
+use openmrs;
+select
+	 epe.patient_id,
+     pa.county_district as County,
+	pa.state_province as Sub_county,
+	pa.address6 as Location,
+	pa.address5 as Sub_location,
+	pa.city_village as Village,
+	pa.address2 as Landmark, 
+     edfi.FacilityName,
+     edfi.siteCode,
+     pi1.identifier as 'PrEP_Number',
+	 ec.unique_identifier as client_id,
+	 epd.Gender,
+	 epd.education_level,
+	 epd.marital_status,
+     date_format(epd.DOB,'%Y-%m-%d') as date_of_birth,
+	 min(epe.visit_date) as prep_enrollment_date,
+	 epe.patient_type,
+	 epe.transfer_in_entry_point,
+     ec.key_population_type as kp_type,
+	 ep.PrePStatusSeq as PrepMonthlyRefillStatusDateSeq,
+     group_concat(concat_ws(':',epf.treatment_plan, epf.visit_date) order by epf.visit_date separator '|') as PrepFollowUpInterventionDateSeq,
+     mid(max(concat(epf.visit_date,epf.appointment_given)),11) as AppointmentGiven,
+     max(epf.appointment_date) as LatestTCA
+from kenyaemr_etl.etl_prep_enrolment epe
+inner join kenyaemr_etl.etl_patient_demographics epd on epe.patient_id=epd.patient_id
+left outer join kenyaemr_etl.etl_contact ec on epe.patient_id=ec.client_id
+left outer join kenyaemr_etl.etl_prep_followup epf ON epe.patient_id = epf.patient_id
+left outer join person_address pa on epe.patient_id=pa.person_id
+left outer join(
+		Select
+		  epmr.patient_id,
+		  epmr.visit_date,
+		  epmr.prep_status,
+		  group_concat(concat_ws(':',epmr.prep_status, epmr.visit_date) order by epmr.visit_date separator '|') as PrepStatusSeq,
+		  GROUP_CONCAT((epmr.prep_status) ORDER BY epmr.visit_date  SEPARATOR '|') AS PrePSeq
+		from kenyaemr_etl.etl_prep_monthly_refill epmr
+		group by epmr.patient_id) as ep ON epe.patient_id = ep.patient_id
+left join(
+		SELECT 
+		   pi2.patient_id,
+		   pi2.identifier
+		FROM patient_identifier pi2 
+		where pi2.identifier_type =16
+		)as pi1 on epe.patient_id = pi1.patient_id,
+kenyaemr_etl.etl_default_facility_info edfi 
+group by epe.patient_id;

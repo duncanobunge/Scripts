@@ -1,8 +1,8 @@
 -- the script is modified to remove the positive clients duplicate records..
 
 use kenyaemr_etl; -- set the kenyaemr_etl db as the targeted db
-Set @startdate='2021-10-01'; -- replace with the startdate of interest
-Set @enddate='2023-05-11';  -- replace with the enddate of interest
+Set @startdate='2022-10-01'; -- replace with the startdate of interest
+Set @enddate='2023-06-15';  -- replace with the enddate of interest
 SELECT
 	@n := @n + 1 serialnumber,
     ed.FacilityName,
@@ -23,19 +23,15 @@ SELECT
 	etl_hts_test.client_tested_as as clienttestedas,
 	etl_hts_test.test_strategy as strategy,
 	etl_hts_test.hts_entry_point as servicepoint,
-    etl_hts_test.test_1_kit_name,
-	etl_hts_test.test_1_kit_lot_no,
-	etl_hts_test.test_1_kit_expiry,
 	etl_hts_test.test_1_result,
-	etl_hts_test.test_2_kit_name,
-	etl_hts_test.test_2_kit_lot_no,
-	etl_hts_test.test_2_kit_expiry,
 	etl_hts_test.test_2_result,
 	etl_hts_test.final_test_result as finalresult,
 	etl_hts_test.patient_given_result as finalresultgiven,
 	etl_hts_test.couple_discordant as couplediscordant,
 	etl_hts_test.tb_screening as tbscreening,
 	etl_hts_test.patient_had_hiv_self_test as selftesting,
+    etl_hts_test.neg_referral_for as RefferalService,
+     etl_hts_test.neg_referral_specify as OtherReferralServices,
 	us.username as htsprovider,
 	etl_hts_referral_and_linkage.facility_linked_to as facilityenrolled,
 	etl_hts_referral_and_linkage.enrollment_date as dateenrolled,

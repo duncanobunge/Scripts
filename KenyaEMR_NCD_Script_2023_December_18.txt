@@ -1,0 +1,94 @@
+USE openmrs;
+SET @StartDate=DATE_FORMAT('2017-01-01','%m-%d-%Y') ;
+SET @EndDate = DATE_FORMAT('2022-09-30','%m-%d-%Y') ;
+SET @reportingDate=DATE_FORMAT(CURDATE(),'%m-%d-%Y');
+
+SELECT
+  dfi.siteCode,
+  dfi.FacilityName,
+  cc.patient_id,
+  de.unique_patient_no AS 'UniquePatientID',
+  DATE_FORMAT(cc.dob,'%m-%d-%Y') AS 'DOB',
+  DATE_FORMAT(FROM_DAYS(DATEDIFF(cc.latest_vis_date,cc.dob)), '%Y')+0 AS AgeatLastVisit,
+  cc.Gender AS 'Sex',
+  DATE_FORMAT(COALESCE(ee.date_first_enrolled_in_care, cc.enroll_date),'%m-%d-%Y') AS DateEnrolledHIVCare,
+  DATE_FORMAT(COALESCE(cc.latest_vis_date,MAX(fup.visit_date)),'%m-%d-%Y') AS 'LatestVisitDate',
+  DATE_FORMAT(COALESCE(cc.latest_tca,MAX(fup.next_appointment_date)),'%m-%d-%Y') AS 'NextAppointmentDate',
+  MID(MAX(CONCAT(fup.visit_date, fup.weight)), 11) AS 'Weight',
+  MID(MAX(CONCAT(fup.visit_date, fup.height)), 11) AS 'Height',
+  DATE_FORMAT((dr.date_started),'%m-%d-%Y') AS StartARTDate,
+  MID(MIN(CONCAT(dr.date_started, dr.regimen_name)), 11)AS StartARTRegimen,
+  MID(MIN(CONCAT(dr.date_started, dr.regimen_line)), 11)AS StartARTRegimenLine,
+  DATE_FORMAT(MAX(dr.date_started),'%m-%d-%Y') AS CurrentARTStartDate,
+  MID(MAX(CONCAT(dr.date_started, dr.regimen_name)), 11) AS CurrentARTRegimen,
+  MID(MAX(CONCAT(dr.date_started, dr.regimen_line)), 11)AS CurrentARTRegimenLine,
+  lee.VLResultSeq,
+  lee.VLOrderReasonSeq,
+  lee.CD4CountSeq,
+--   DATE_FORMAT(lee.LatestVLDate,'%m-%d-%Y') AS MostRecentVLDate,
+  ROUND(MID(MAX(CONCAT(fup.visit_date, fup.weight)), 11)/((MID(MAX(CONCAT(fup.visit_date, fup.height)), 11)*0.01)*(MID(MAX(CONCAT(fup.   visit_date, fup.height)), 11)*0.01)),2) AS 'BMI',
+  CASE WHEN MID(MAX(CONCAT(fup.visit_date,fup.tb_status)),11) IS NULL THEN 'Missing' ELSE 'YES' END AS 'TB Screening',
+  DATE_FORMAT(kenyaemr_etl.etl_ipt_initiation.visit_date,'%m-%d-%Y') AS 'IPTInitiationDate',
+  MID(MAX(CONCAT(fup.visit_date, fup.cough)), 11) AS 'Cough',
+  MID(MAX(CONCAT(fup.visit_date, fup.temperature)), 11) AS Temperature,
+  MID(MAX(CONCAT(fup.visit_date, fup.nutritional_status)), 11) AS NutritionStatus,
+  MID(MAX(CONCAT(fup.visit_date, fup.general_examination)), 11) AS GeneralExamination,
+  MID(MAX(CONCAT(fup.visit_date, fup.has_chronic_illnesses_cormobidities)), 11) AS ChronicCormobidities,
+  ei.ChronicIllness,
+  DATE_FORMAT(ei.LatestIllnessOnset,'%m-%d-%Y') AS LatestIllnessOnset,
+  MID(MAX(CONCAT(fup.visit_date, fup.systolic_pressure)), 11) AS Systolic,
+  MID(MAX(CONCAT(fup.visit_date, fup.diastolic_pressure)), 11) AS Diastolic,
+  DATE_FORMAT(fup.visit_date,'%m-%d-%Y') AS BPTestDate ,
+  g.glucoseTest,
+  DATE_FORMAT(g.glucoseTestDate,'%m-%d-%Y')AS GlucoseTestDate,
+  MID(MAX(CONCAT(eds.visit_date, eds.PHQ_9_rating)), 11) AS PHQ9Rating,
+  DATE_FORMAT(MAX(eds.visit_date),'%m-%d-%Y') AS LatestDepressionScreeningDate,
+  MID(MAX(CONCAT(adas.visit_date, adas.smoking_frequency)), 11) AS smoking_frequency,
+  MID(MAX(CONCAT(adas.visit_date, adas.drugs_use_frequency)), 11) AS drugs_use_frequency,
+  MID(MAX(CONCAT(adas.visit_date,  adas.alcohol_drinking_frequency)), 11) AS alcohol_drinking_frequency,
+  DATE_FORMAT(MAX(adas.visit_date),'%m-%d-%Y') AS AlcoholDrugMostRecentScreeningDate,
+  cc.started_on_drugs
+FROM kenyaemr_etl.etl_hiv_enrollment ee 
+LEFT OUTER JOIN kenyaemr_etl.etl_current_in_care cc ON ee.patient_id=cc.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_drug_event dr ON ee.patient_id = dr.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_patient_hiv_followup fup ON ee.patient_id= fup.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_patient_demographics de ON ee.patient_id = de.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_depression_screening eds ON ee.patient_id = eds.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_alcohol_drug_abuse_screening  adas ON ee.patient_id=adas.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_ipt_outcome ON ee.patient_id =  kenyaemr_etl.etl_ipt_outcome.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_ipt_initiation ON ee.patient_id = kenyaemr_etl.etl_ipt_initiation.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_patient_program_discontinuation eppd ON ee.patient_id=eppd.patient_id AND eppd.program_name='HIV'
+LEFT OUTER JOIN(
+				SELECT
+				   ei.patient_id,
+				   ei.chronic_illness_onset_date AS onset_date,
+				   MAX(ei.chronic_illness_onset_date) AS LatestIllnessOnset,
+				   MID(MAX(CONCAT(ei.visit_date, ei.chronic_illness)), 11) AS ChronicIllness
+				FROM kenyaemr_etl.etl_allergy_chronic_illness ei
+				GROUP BY ei.patient_id
+)AS ei ON ee.patient_id = ei.patient_id
+LEFT OUTER JOIN(
+				SELECT
+				  o.person_id,
+				  cc.patient_id,
+				  DATE(o.obs_datetime) AS glucoseTestDate,
+				  MID(MAX(CONCAT(DATE(o.obs_datetime), o.value_numeric)), 11) AS glucoseTest
+				FROM obs o
+				LEFT OUTER JOIN  kenyaemr_etl.etl_current_in_care cc ON o.person_id=cc.patient_id
+				WHERE o.concept_id IN (887,160912)
+				GROUP BY o.person_id
+) AS g ON ee.patient_id=g.patient_id
+LEFT OUTER JOIN(
+			   SELECT
+					 ele.patient_id,
+					 GROUP_CONCAT(DISTINCT(IF(ele.lab_test IN (856,1305),CONCAT(ele.test_result,':',ele.visit_date),NULL)) ORDER BY ele.visit_date SEPARATOR '|') AS VLResultSeq,
+					 GROUP_CONCAT(DISTINCT(IF(ele.lab_test IN (856,1305),CONCAT(ele.order_reason,':',ele.visit_date),NULL)) ORDER BY ele.visit_date SEPARATOR '|') AS VLOrderReasonSeq,
+					 GROUP_CONCAT(DISTINCT(IF(ele.lab_test IN (5497),CONCAT(ele.test_result,':',ele.visit_date),NULL)) ORDER BY ele.visit_date SEPARATOR '|') AS CD4CountSeq
+			   FROM
+			   kenyaemr_etl.etl_laboratory_extract ele 
+			   GROUP BY ele.patient_id
+)AS lee  ON ee.patient_id=lee.patient_id,
+kenyaemr_etl.etl_default_facility_info dfi
+GROUP BY patient_id
+HAVING DateEnrolledHIVCare BETWEEN @StartDate AND @EndDate
+

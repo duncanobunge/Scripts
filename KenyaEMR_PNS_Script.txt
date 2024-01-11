@@ -1,0 +1,52 @@
+use kenyaemr_etl;
+select
+  t.*,
+  ht.ccc_number as PositivecontactUPN,
+  ht.finalhivtest,
+  ht.htsencounterdate
+from
+(select
+              fa.siteCode,
+              fa.FacilityName,
+              de.patient_id as indexId,
+              de.unique_patient_no AS UPN,
+              de.given_name,
+              de.middle_name,
+              de.family_name,
+              de.DOB,
+              de.phone_number AS phone_no, 
+              de.Gender AS gender,
+              de.marital_status AS marital,
+              kenyaemr_etl.etl_patient_contact.first_name AS Contact_FN,
+              kenyaemr_etl.etl_patient_contact.middle_name AS Contact_MN,
+              kenyaemr_etl.etl_patient_contact.last_name AS contact_LN,
+              kenyaemr_etl.etl_patient_contact.phone_contact AS phone_number,
+              CASE
+				   WHEN kenyaemr_etl.etl_patient_contact.relationship_type = 970 THEN "Mother"
+				   WHEN kenyaemr_etl.etl_patient_contact.relationship_type = 1528 THEN "Child"
+				   WHEN kenyaemr_etl.etl_patient_contact.relationship_type = 5617 THEN "Spouse"
+				   WHEN kenyaemr_etl.etl_patient_contact.relationship_type = 163565 THEN "Sexual Partner"
+				   WHEN kenyaemr_etl.etl_patient_contact.relationship_type = 166606 THEN "SNS"
+				   ELSE  kenyaemr_etl.etl_patient_contact.relationship_type
+               END AS relationship, 
+              kenyaemr_etl.etl_patient_contact.baseline_hiv_status AS baseline_hiv_status
+FROM kenyaemr_etl.etl_patient_demographics de
+INNER JOIN kenyaemr_etl.etl_patient_contact ON  de.patient_id = kenyaemr_etl.etl_patient_contact.patient_related_to
+LEFT OUTER JOIN  openmrs.kenyaemr_hiv_testing_patient_contact cnt ON de.patient_id = cnt.patient_id,
+kenyaemr_etl.etl_default_facility_info fa		
+ORDER BY
+de.unique_patient_no)t
+INNER JOIN kenyaemr_etl.etl_current_in_care  cc ON t.indexId = cc.patient_id
+LEFT OUTER JOIN (
+    SELECT
+       eht.patient_id,
+       max(eht.visit_date) as htsencounterdate,
+       mid(max(concat(eht.visit_date,eht.final_test_result)),11) as finalhivtest,
+        mid(max(concat(ehr.visit_date,ehr.ccc_number)),11) as ccc_number,
+       cnt.patient_related_to
+	FROM kenyaemr_etl.etl_hts_test eht
+    INNER JOIN openmrs.kenyaemr_hiv_testing_patient_contact cnt ON eht.patient_id = cnt.patient_id
+    LEFT OUTER JOIN kenyaemr_etl.etl_hts_referral_and_linkage ehr ON eht.patient_id = ehr.patient_id
+    GROUP BY eht.patient_id
+) as ht ON t.indexId=ht.patient_related_to
+

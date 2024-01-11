@@ -1,0 +1,92 @@
+use openmrs;
+SET @Start_Date='2017-01-01'; 
+SET @End_Date = '2021-12-31' ;
+
+EXPLAIN
+select
+     edfi.siteCode,
+	 edfi.FacilityName as SiteName,
+	 pa.county_district as County,
+	 pa.state_province as Sub_county,
+	 pa.address6 as Location,
+	 pa.address5 as Sub_location,
+	 pa.city_village as Village,
+     pa.address2 as Landmark,
+     ephf.patient_id,
+     pd.unique_patient_no,
+ max(ephf.visit_date) as LatestClinicalEnc,
+ min(he.visit_date) as EnrollmentDate,
+ min(dr.date_started) as ART_StartDate,
+ mid(min(concat(dr.date_started, dr.regimen_name)), 11)as StartARTRegimen,
+ mid(min(concat(dr.date_started, dr.regimen_line)), 11)as StartARTRegimenLine,
+ GROUP_CONCAT(distinct(CONCAT(ephf.who_stage,':',ephf.visit_date)) ORDER BY ephf.visit_date SEPARATOR '|') as WHOStageSeq,
+ GROUP_CONCAT(distinct(IF(ele.lab_test IN (856,1305),CONCAT(ele.test_result,':',ele.visit_date),null)) ORDER BY ele.visit_date SEPARATOR '|') as VLResultSeq,
+ GROUP_CONCAT(distinct(IF(ele.lab_test IN (856,1305),CONCAT(ele.order_reason,':',ele.visit_date),null)) ORDER BY ele.visit_date SEPARATOR '|') as VLOrderReasonSeq,
+ GROUP_CONCAT(distinct(IF(ele.lab_test IN (5497),CONCAT(ele.test_result,':',ele.visit_date),null)) ORDER BY ele.visit_date SEPARATOR '|') as CD4CountSeq,
+ mid(max(concat(ephf.visit_date,ephf.weight)), 11) as RecentWeight,
+ mid(max(concat(ephf.visit_date,ephf.height)), 11) as RecentHeight,
+ mid(max(concat(ephf.visit_date,ephf.diastolic_pressure)), 11) as RecentDiastolicBP,
+ mid(max(concat(ephf.visit_date,ephf.systolic_pressure)), 11) as RecentsystolicBP,
+ mid(max(concat(ephf.visit_date,ephf.tb_status)), 11) as TBScreeningAtLastVisit,
+ max(etbe.visit_date) as MostRecentTBEnrollmentDate,
+ mid(max(concat(ephf.visit_date,ephf.differentiated_care)), 11) as DCM_model,
+ min(ipt.visit_date) as IPTStartdate,
+ ipto.outcome  as IPTCompletionstatus,
+ max(ipto.visit_date) as IPTOutcomedate,
+ mid(max(concat(ephf.visit_date,ephf.pwp_disclosure)),11) as pwp_disclosure,
+ mid(max(concat(ephf.visit_date,pwp_partner_tested)),11) AS pwp_partner_tested,
+ mid(max(concat(ephf.visit_date,ephf.condom_provided)),11) AS condom_provided,
+ mid(max(concat(ephf.visit_date,ephf.substance_abuse_screening)),11) AS substance_abuse_screening,
+ mid(max(concat(ephf.visit_date,ephf. screened_for_sti)),11) as  screened_for_sti,
+ mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11) AS 'FPMethodatLastVisit',
+ mid(max(concat(ephf.visit_date,ephf.pregnancy_status)),11) as PregnancyStatusatLastVisit,
+ mid(max(concat(ephf.visit_date,ephf.breastfeeding)),11) as BreastFeedingStatusAtLastVisit,
+ mid(max(concat(ephf.visit_date,ephf.wants_pregnancy)),11) as PIA_at_LastVisit,
+ mid(max(concat(ephf.visit_date,ephf.stability)), 11) as StabilityStatusAtLastVisit,
+ eds.PHQ_9_rating  as PHQ9Rating,
+ max(eds.visit_date) as 'RecentDepressionScreeningDate',
+ mid(max(concat(eccs.visit_date, eccs.visit_type)), 11) as CaCxVisitType,
+ mid(max(concat(eccs.visit_date, eccs.screening_type)), 11) as CaCxscreening_type,
+ mid(max(concat(eccs.visit_date, eccs.screening_method)), 11) as CaCxscreening_method,
+ mid(max(concat(eccs.visit_date, eccs.screening_result)), 11) as CaCxscreening_result,
+ mid(max(concat(eccs.visit_date, eccs.treatment_method)), 11) as CaCxtreatment_method,
+ max(eccs.visit_date) as CaCxlatestScreeningDate,
+ mid(max(concat(adas.visit_date, adas.smoking_frequency)), 11) as smoking_frequency,
+ mid(max(concat(adas.visit_date, adas.drugs_use_frequency)), 11) as drugs_use_frequency,
+ mid(max(concat(adas.visit_date,  adas.alcohol_drinking_frequency)), 11) as alcohol_drinking_frequency,
+ max(adas.visit_date) as CAGECraftMostRecentScreeningDate,
+ GROUP_CONCAT(distinct(CONCAT(ecdt.tracing_type,':',ecdt.visit_date)) ORDER BY ecdt.visit_date SEPARATOR '|') as TracingTypeSeq,
+ GROUP_CONCAT(distinct(CONCAT(ecdt.tracing_outcome,':',ecdt.visit_date)) ORDER BY ecdt.visit_date SEPARATOR '|') as TracingOutcomeSeq,
+ GROUP_CONCAT(distinct(CONCAT(ecdt.reason_for_missed_appointment,':',ecdt.visit_date)) ORDER BY ecdt.visit_date SEPARATOR '|') as ReasonForMissedAppointmentSeq,
+ GROUP_CONCAT(distinct(CONCAT(ecdt.non_coded_missed_appointment_reason,':',ecdt.visit_date)) ORDER BY ecdt.visit_date SEPARATOR '|') as ReasonForMissedAppointmentNonCodedSeq,
+ mid(max(concat(date(ecdt.visit_date),ecdt.reason_for_missed_appointment)),11) as RecentMissedAppointmentReason,
+ mid(max(concat(date(ecdt.visit_date),ecdt.non_coded_missed_appointment_reason)),11) as RecentMissedAppointmentNonCodedReason,
+ mid(max(concat(eme.visit_date,eme.service_type)),11) as RecentMCHServiceType,
+ Max(eme.visit_date) as MostRecentMCHEnrollmentDate,
+ date(eme.first_anc_visit_date) as MostRecentANCVisitEnrollmentDate,
+ max(mav.visit_date) as MostRecentANCVisitEncounterDate,
+ max(mpv.visit_date) as MostRecentPNCVisitEncounterDate,
+ max(ephf.next_appointment_date) as NextTCA,
+ datediff(now(),max(ephf.next_appointment_date)) as DaysMissedAppointment
+from kenyaemr_etl.etl_patient_hiv_followup ephf
+inner join kenyaemr_etl.etl_patient_demographics pd on ephf.patient_id=pd.patient_id
+inner join kenyaemr_etl.etl_hiv_enrollment he on ephf.patient_id=he.patient_id
+inner join kenyaemr_etl.etl_drug_event dr on ephf.patient_id = dr.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_laboratory_extract ele ON ephf.patient_id=ele.patient_id 
+LEFT OUTER JOIN kenyaemr_etl.etl_ipt_initiation ipt ON ephf.patient_id = ipt.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_ipt_outcome  ipto ON ephf.patient_id = ipto.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_depression_screening eds ON ephf.patient_id  = eds.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_alcohol_drug_abuse_screening  adas ON ephf.patient_id=adas.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_cervical_cancer_screening eccs ON ephf.patient_id=eccs.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_tb_enrollment etbe ON ephf.patient_id=etbe.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_mch_postnatal_visit mpv ON ephf.patient_id=mpv.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_mch_antenatal_visit mav ON ephf.patient_id=mav.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_ccc_defaulter_tracing ecdt ON ephf.patient_id=ecdt.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_mch_enrollment eme ON ephf.patient_id= eme.patient_id
+LEFT OUTER JOIN person_address pa on ephf.patient_id=pa.person_id,
+kenyaemr_etl.etl_default_facility_info edfi
+group by ephf.patient_id
+HAVING DaysMissedAppointment>28 and ART_StartDate between @Start_Date AND
+@End_Date and  ephf.patient_id  NOT IN (
+						SELECT ppd.patient_id FROM kenyaemr_etl.etl_patient_program_discontinuation ppd 
+                        WHERE ppd.discontinuation_reason IN (159492,160035,1267,5240))

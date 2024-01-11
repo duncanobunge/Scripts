@@ -5,6 +5,8 @@
 -- Finally check on your on the Scores sheets
 use kenyaemr_etl;
 select
+  i.siteCode,
+  i.FacilityName,
   cc.patient_id,
   de.unique_patient_no as 'Unique Patient ID',
   date_format(cc.dob,'%d-%m-%Y') as 'DOB (dd-mm-yyyy ELSE missing)',
@@ -17,6 +19,12 @@ select
   date_format(cc.latest_vis_date,'%d-%m-%Y') as 'Date Last Appointment(dd-mm-yyyy)',
   date_format(cc.latest_tca,'%d-%m-%Y') as 'Date Next Appointment (dd-mm-yyyy)',
   '' as DrugDosageGiven,
+  CASE
+   WHEN mid(max(concat(fup.visit_date, fup.person_present)), 11)=978 THEN 'Self'
+   WHEN mid(max(concat(fup.visit_date, fup.person_present)), 11)=161642 THEN 'Treatment Supporter'
+   WHEN mid(max(concat(fup.visit_date, fup.person_present)), 11)=159802 THEN 'Documentation'
+   ELSE 'Missing'
+   END as 'PatientAttendanceStatus',
   mid(max(concat(fup.visit_date, fup.weight)), 11) as 'Weight(kg)',
   mid(max(concat(fup.visit_date, fup.height)), 11) as 'Height(cm)',
   Round(mid(max(concat(fup.visit_date, fup.weight)), 11)/((mid(max(concat(fup.visit_date, fup.height)), 11)*0.01)*(mid(max(concat(fup.visit_date, fup.height)), 11)*0.01)),2) as 'BMI',
@@ -56,7 +64,8 @@ inner join kenyaemr_etl.etl_patient_hiv_followup fup on cc.patient_id= fup.patie
 inner join kenyaemr_etl.etl_patient_demographics de on cc.patient_id = de.patient_id
 inner join kenyaemr_etl.etl_hiv_enrollment ee on cc.patient_id = ee.patient_id
 left outer join kenyaemr_etl.etl_ipt_outcome on cc.patient_id =  kenyaemr_etl.etl_ipt_outcome.patient_id
-LEFT OUTER JOIN kenyaemr_etl.etl_ipt_initiation ON cc.patient_id = kenyaemr_etl.etl_ipt_initiation.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_ipt_initiation ON cc.patient_id = kenyaemr_etl.etl_ipt_initiation.patient_id,
+kenyaemr_etl.etl_default_facility_info i
 group by patient_id
-order by rand()
-limit 25
+-- order by rand()
+-- limit 25

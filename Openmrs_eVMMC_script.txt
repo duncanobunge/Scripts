@@ -1,0 +1,89 @@
+use openmrs;
+set @startDate='2021-10-01';
+set @endDate='2022-08-31';
+set @location =(2,40,265,238,217,215,237,216,42,261,41,258,233,267,44,228,43);
+
+SELECT
+	l.county_district AS SubCounty,
+	l.name AS Site,
+	l.postal_code AS MFL_Code,
+	MAX(IF(e.encounter_type=33, DATE(e.encounter_datetime),NULL)) AS 'Circum_Date',
+	pi.identifier AS ClientNumber, 
+	MAX(IF(o.concept_id=6527,cn.name,NULL)) AS MainSourceOfVMMCInfo,
+	MAX(IF(o.concept_id in(8283),o.value_numeric,null)) as Consent_Form_Serial_Number,
+	CONCAT_WS(" ",pnm.given_name,pnm.middle_name,pnm.family_name) AS ClientFullName,
+	DATEDIFF(encounter_datetime, birthdate) DIV 365.25 AS AgeInYears,
+	p.gender AS Sex,
+	MAX(IF(o.concept_id=7776,cn.name,NULL)) AS Eligible_For_Testing,
+	MAX(IF(e.encounter_type in(46) and o.concept_id=8155,cn.name,NULL)) AS HIVTestResults,
+	MAX(IF(o.concept_id=7451,cn.name,NULL)) AS HIVSelfReport,
+	MAX(IF(e.encounter_type=33 AND o.concept_id=8168,cn.name,NULL)) AS Consented,
+	MAX(IF(o.concept_id=7417,cn.name,NULL)) AS ProcedureType,
+	MAX(IF(o.concept_id=8290,o.value_text,NULL)) AS StartTime,
+	MAX(IF(o.concept_id=8291,o.value_text,NULL)) AS EndTime,
+	MAX(IF(e.encounter_type=33 AND o.concept_id=7196 ,cn.name,NULL)) AS AEDuringSurgery,
+	MAX(IF(e.encounter_type=33 AND o.concept_id=8251 ,cn.name,NULL)) AS SeverityOfAEDuring,
+    z.AEPostSurgery,
+    z.SeverityOfAEPost,
+	MAX(IF(o.concept_id IN (8252,8293),o.value_text,NULL)) AS Surgeon,
+	MAX(IF(o.concept_id IN(1570,8328),o.value_text,NULL)) AS Assistant,
+    z.Post_Surgery_Visit,
+    z.Post_Surgery_Visit_Date,
+    x.No_Of_Days_Since_Surgery,
+    MAX(IF(e.encounter_type=33, DATE(e.date_created),NULL)) AS Date_Created,
+CASE  
+WHEN (DATEDIFF(encounter_datetime,birthdate)DIV 365.25)<1 THEN '<1 Yr' 
+WHEN (DATEDIFF(encounter_datetime,birthdate)DIV 365.25) BETWEEN 1 AND 4.99 THEN '1-4 Yrs'
+WHEN (DATEDIFF(encounter_datetime,birthdate)DIV 365.25) BETWEEN 5 AND 9.99 THEN '5-9 Yrs' 
+WHEN (DATEDIFF(encounter_datetime,birthdate)DIV 365.25) BETWEEN 10 AND 14.99 THEN '10-14 Yrs' 
+WHEN (DATEDIFF(encounter_datetime,birthdate)DIV 365.25) BETWEEN 15 AND 19.99 THEN '15-19 Yrs' 
+WHEN (DATEDIFF(encounter_datetime,birthdate)DIV 365.25) BETWEEN 20 AND 24.99 THEN '20-24 Yrs' 
+WHEN (DATEDIFF(encounter_datetime,birthdate)DIV 365.25) BETWEEN 25 AND 29.99 THEN '25-29 Yrs' 
+WHEN (DATEDIFF(encounter_datetime,birthdate)DIV 365.25) BETWEEN 30 AND 34.99 THEN '30-34 Yrs' 
+WHEN (DATEDIFF(encounter_datetime,birthdate)DIV 365.25) BETWEEN 35 AND 39.99 THEN '35-39 Yrs' 
+WHEN (DATEDIFF(encounter_datetime,birthdate)DIV 365.25) BETWEEN 40 AND 44.99 THEN '40-44 Yrs' 
+WHEN (DATEDIFF(encounter_datetime,birthdate)DIV 365.25) BETWEEN 45 AND 49.99 THEN '45-49 Yrs' 
+WHEN (DATEDIFF(encounter_datetime,birthdate)DIV 365.25) >=50 THEN '50+ Yrs' 
+ELSE NULL
+END AS Age_Group 
+FROM encounter e
+JOIN patient_identifier `pi` ON pi.patient_id = e.patient_id AND pi.voided=0 AND e.voided = 0
+JOIN patient vp ON vp.patient_id = e.patient_id AND vp.voided = 0
+JOIN person p ON p.person_id = e.patient_id AND p.voided=0
+JOIN users u ON u.user_id=e.creator
+LEFT OUTER JOIN encounter_provider enpro ON enpro.encounter_id = e.encounter_id
+LEFT OUTER JOIN provider pro ON pro.provider_id = enpro.provider_id
+JOIN person_name pn ON pn.person_id=u.person_id AND pn.voided = 0
+JOIN location l ON l.location_id = e.location_id
+LEFT OUTER JOIN obs o ON o.encounter_id=e.encounter_id AND o.voided=0 
+	AND o.concept_id IN (8293,8251,7196,7525,1501,7455,1599,7194,7158,1544,7417,7439,6688,6501,6367,7444,7445,7451,7440,7452,1683,5995,864,7428,7429,7430,7432,7040,1433,5085,5086,5087,5089,5088,1682,7453,7419,7420,1573,7422,7424,7427,8290,8291,1570,8155,8252,8168,6527,1501,7776,8328,8283)
+JOIN person_name pnm ON pnm.person_id = o.person_id
+LEFT OUTER JOIN person_name pnp ON pnp.person_id = pro.person_id
+LEFT OUTER JOIN concept_name cn ON cn.concept_id=o.value_coded AND cn.concept_name_type='FULLY_SPECIFIED'
+
+LEFT OUTER JOIN (SELECT e.patient_id,
+       MAX(IF(e.encounter_type=34, DATE(e.encounter_datetime),NULL)) AS Post_Surgery_Visit_Date,
+       max(if(o.concept_id=1501,cn.name,null)) as Post_Surgery_Visit,
+       max(if(e.encounter_type=34 and o.concept_id=8256 ,cn.name,null)) as AEPostSurgery,
+       max(if(e.encounter_type=34 and o.concept_id=8251 ,cn.name,null)) as SeverityOfAEPost
+       FROM encounter e
+	   left outer join obs o on o.encounter_id=e.encounter_id and o.voided=0 and o.concept_id in (8251,8256,1501)
+	   left outer join concept_name cn on cn.concept_id=o.value_coded and cn.concept_name_type='FULLY_SPECIFIED'
+       where encounter_type in (34) 
+	   and e.voided = 0
+	   group by e.patient_id
+       )z on z.patient_id = e.patient_id
+       
+LEFT OUTER JOIN (SELECT e.patient_id,
+       MAX(IF(e.encounter_type=33, DATE(e.encounter_datetime),NULL)) AS Surgery_Visit_Date,
+       MAX(IF(e.encounter_type=34, DATE(e.encounter_datetime),NULL)) AS Post_Surgery_Visit_Date,
+       DATEDIFF(MAX(IF(e.encounter_type=34, DATE(e.encounter_datetime),NULL)),MAX(IF(e.encounter_type=33, DATE(e.encounter_datetime),NULL))) AS No_Of_Days_Since_Surgery
+       FROM encounter e
+       where encounter_type in (33,34) 
+	   and e.voided = 0
+	   group by e.patient_id
+       )x on x.patient_id = e.patient_id       
+WHERE e.encounter_type IN (33,34,56,53,46,47,48,49,45) AND date(e.encounter_datetime) BETWEEN '2021-10-01' and '2022-08-31' AND e.location_id IN (216,40,245,219,237,41,42,57,223,228,238,243,245,246,247,254,256,260,261,265,271,272,275)
+GROUP BY e.patient_id
+HAVING ClientFullName NOT LIKE "%Test%" AND ClientFullName NOT LIKE "%Felix Felix Felix%" AND Consented = "YES"
+ORDER BY e.location_id, 'Circum_Date';

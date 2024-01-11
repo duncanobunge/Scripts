@@ -1,0 +1,182 @@
+use openmrs;
+select
+ dfi.siteCode,
+ dfi.FacilityName,
+ hes.patient_id,
+ IF(pi.identifier_type=3,pi.identifier, NULL) AS OpenMRSID,
+ epd.family_name,
+ epd.middle_name,
+ epd.given_name,
+ DATE_FORMAT(FROM_DAYS(DATEDIFF(max(date(hes.visit_date)),epd.DOB)), '%Y')+0 AS AgeAsAtScreeningVisit,
+ epd.Gender,
+ epd.marital_status,
+ max(hes.visit_date) as MostRecentScreeningDate,
+ CASE
+  WHEN mid(max(concat(hes.visit_date,hes.population_type)),11) IN (164928) THEN 'GP'
+  WHEN mid(max(concat(hes.visit_date,hes.population_type)),11) IN (164929) THEN 'KP'
+  WHEN mid(max(concat(hes.visit_date,hes.population_type)),11) IN (1067) THEN 'Unknown'
+  ELSE ''
+  END as PopulationType,
+ mid(max(concat(hes.visit_date,hes.key_population_type)),11) as KeyPopType,
+ mid(max(concat(hes.visit_date,hes.priority_population_type)),11) as PriorityPopType,
+ mid(max(concat(hes.visit_date,hes.patient_disabled)),11) as PatientDisabled,
+ mid(max(concat(hes.visit_date,hes.disability_type)),11) as DisabilityType,
+ mid(max(concat(hes.visit_date,hes.recommended_test)),11) as RecommendedTest,
+ CASE 
+   WHEN mid(max(concat(hes.visit_date,hes.department)),11) IN (160539) THEN 'VCT'
+   WHEN mid(max(concat(hes.visit_date,hes.department)),11) IN (160538) THEN 'PMTCT'
+   WHEN mid(max(concat(hes.visit_date,hes.department)),11) IN (160537) THEN 'Peads IPD'
+   WHEN mid(max(concat(hes.visit_date,hes.department)),11) IN (160536) THEN 'Adult IPD'
+   WHEN mid(max(concat(hes.visit_date,hes.department)),11) IN (160542) THEN 'OPD'
+   WHEN mid(max(concat(hes.visit_date,hes.department)),11) IN (160541) THEN 'TB Clinic'
+   WHEN mid(max(concat(hes.visit_date,hes.department)),11) IN (160543) THEN 'CBO'
+   WHEN mid(max(concat(hes.visit_date,hes.department)),11) IN (160544) THEN 'Under five clinic'
+   WHEN mid(max(concat(hes.visit_date,hes.department)),11) IN (160545) THEN 'Outreach'
+   WHEN mid(max(concat(hes.visit_date,hes.department)),11) IN (160546) THEN 'STI'
+   ELSE 'Missing'
+   END as Department,
+ CASE
+   WHEN mid(max(concat(hes.visit_date,hes.patient_type)),11) IN (164163) THEN 'HP'
+   WHEN mid(max(concat(hes.visit_date,hes.patient_type)),11) IN (164953) THEN 'Non-HP'
+   ELSE ''
+   END as PatientType,
+ CASE 
+   WHEN mid(max(concat(hes.visit_date,hes.is_health_worker)),11) IN (1065) THEN 'Yes'
+   WHEN mid(max(concat(hes.visit_date,hes.is_health_worker)),11) IN (1066) THEN 'No'
+   ELSE ''
+   END as IsHealthCareWorker,
+ mid(max(concat(hes.visit_date,hes.relationship_with_contact)),11) as RelationshipWithContact,
+ mid(max(concat(hes.visit_date,hes.mother_hiv_status)),11) as MotherHIVstatus,
+ CASE
+   WHEN mid(max(concat(hes.visit_date,hes.tested_hiv_before )),11) IN (1065) THEN 'Yes'
+   WHEN mid(max(concat(hes.visit_date,hes.tested_hiv_before )),11) IN (1066) THEN 'No'
+   ELSE ''
+   END as TestedHIVBefore,
+ CASE
+    WHEN mid(max(concat(hes.visit_date,hes.who_performed_test)),11) IN (5619) THEN 'HealthCare Provider' 
+    ELSE ''
+    END as WhoPerformedTest,
+ CASE
+    WHEN mid(max(concat(hes.visit_date,hes.test_results)),11) IN (664) THEN 'Negative'
+    WHEN mid(max(concat(hes.visit_date,hes.test_results)),11) IN (703) THEN 'Positive'
+    ELSE ''
+    END as HTSTestResults,
+ mid(max(concat(hes.visit_date,hes.date_tested)),11) as DateTested,
+ CASE
+   WHEN mid(max(concat(hes.visit_date,hes.started_on_art)),11) IN (1065) THEN 'Yes'
+   WHEN mid(max(concat(hes.visit_date,hes.started_on_art)),11) IN (1066) THEN 'No'
+   ELSE ''
+   END as StartedOnART,
+ mid(max(concat(hes.visit_date,hes.upn_number)),11) as UPN_Number,
+ CASE 
+   WHEN mid(max(concat(hes.visit_date,hes.ever_had_sex)),11) IN (1) THEN 'Yes'
+   WHEN mid(max(concat(hes.visit_date,hes.ever_had_sex)),11) IN (0) THEN 'NO'
+   ELSE ''
+   END as EverHadSex,
+ mid(max(concat(hes.visit_date,hes.sexually_active)),11) as SexuallyActive,
+ mid(max(concat(hes.visit_date,hes.new_partner)),11) as NewPartner,
+ mid(max(concat(hes.visit_date,hes.partner_hiv_status)),11) as PartnerHIVstatus,
+ CASE
+    WHEN mid(max(concat(hes.visit_date,hes.couple_discordant)),11) IN (1065) THEN 'Yes'
+	WHEN mid(max(concat(hes.visit_date,hes.couple_discordant)),11) IN (1066) THEN 'No'
+    ELSE ''
+    END as CoupleDiscordant,
+ mid(max(concat(hes.visit_date,hes.multiple_partners)),11) as MultiplePartner,
+ mid(max(concat(hes.visit_date,hes.number_partners)),11) as NumberOfPartners,
+ CASE 
+    WHEN mid(max(concat(hes.visit_date,hes.alcohol_sex )),11) IN (1385) THEN 'Sometimes'
+    WHEN mid(max(concat(hes.visit_date,hes.alcohol_sex )),11) IN (1358) THEN 'Always'
+    WHEN mid(max(concat(hes.visit_date,hes.alcohol_sex )),11) IN (1066) THEN 'No'
+    WHEN mid(max(concat(hes.visit_date,hes.alcohol_sex )),11) IN (1067) THEN 'Unknown'
+    ELSE ''
+    END as AlcoholSex,
+ CASE
+    WHEN mid(max(concat(hes.visit_date,hes.test_strategy)),11) IN (164163) THEN 'HP'
+	WHEN mid(max(concat(hes.visit_date,hes.test_strategy)),11) IN (164953) THEN 'NP'
+    WHEN mid(max(concat(hes.visit_date,hes.test_strategy)),11) IN (164954) THEN 'Integrated VCT'
+    WHEN mid(max(concat(hes.visit_date,hes.test_strategy)),11) IN (164955) THEN 'Standalone VCT'
+    WHEN mid(max(concat(hes.visit_date,hes.test_strategy)),11) IN (159938) THEN 'Homebased HTS'
+    WHEN mid(max(concat(hes.visit_date,hes.test_strategy)),11) IN (159938) THEN 'Mobile VCT'
+    WHEN mid(max(concat(hes.visit_date,hes.test_strategy)),11) IN (164163) THEN 'PITC'
+    WHEN mid(max(concat(hes.visit_date,hes.test_strategy)),11) IN (166606) THEN 'SNS'
+    WHEN mid(max(concat(hes.visit_date,hes.test_strategy)),11) IN (161557) THEN 'Index Testing'
+    WHEN mid(max(concat(hes.visit_date,hes.test_strategy)),11) IN (5622) THEN 'Other'
+    ELSE ''
+    END as TestStrategy,
+ CASE 
+    WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (5485) THEN 'IPD'
+    WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (160542) THEN 'OPD'
+	WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (162181) THEN 'Peadiatric Clinic'
+	WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (160552) THEN 'Nutrition Clinic'
+    WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (160541) THEN 'TB clinic'
+    WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (160538) THEN 'PMTCT ANC'
+    WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (160456) THEN 'PMTCT MAT'
+    WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (1623) THEN 'PMTCT PNC'
+    WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (5485) THEN 'IPD'
+	WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (159940) THEN 'VCT'
+	WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (162223) THEN 'VMMC'
+    	WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (160546) THEN 'STI Clinic'
+	WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (163096) THEN 'Community Testing'
+    WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (159938) THEN 'HomeBased Testing'
+	WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (160522) THEN 'Emergency visit'
+        WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (159939) THEN 'Mobile Outreach'
+    WHEN mid(max(concat(hes.visit_date,hes.hts_entry_point)),11) IN (5622) THEN 'Other'
+    END as HTSEntryPoint,
+ mid(max(concat(hes.visit_date,hes.hts_risk_category)),11) as HTSRiskCategory,
+ mid(max(concat(hes.visit_date,hes.hts_risk_score)),11) as HTSRiskScore,
+ mid(max(concat(hes.visit_date,hes.money_sex)),11) as TransactSex,
+ mid(max(concat(hes.visit_date,hes.condom_burst)),11) as CondomBurst,
+ mid(max(concat(hes.visit_date,hes.unknown_status_partner)),11) as UnknownStatusPartner,
+ mid(max(concat(hes.visit_date,hes.known_status_partner)),11) as KnownStatusPartner,
+ mid(max(concat(hes.visit_date,hes.experienced_gbv)),11) as ExperiencedGBV,
+ mid(max(concat(hes.visit_date,hes.type_of_gbv)),11) as TypeOfGBV,
+ mid(max(concat(hes.visit_date,hes.service_received)),11) as ServiceReceived,
+ mid(max(concat(hes.visit_date,hes.currently_on_prep)),11) as CurrentlyOnPREP,
+ mid(max(concat(hes.visit_date,hes.recently_on_pep)),11) as RecentlyUsedPEP,
+ mid(max(concat(hes.visit_date,hes.recently_had_sti)),11) as RecentlyHadSTI,
+ mid(max(concat(hes.visit_date,hes.tb_screened)),11) as TBScreened,
+ CASE
+  WHEN mid(max(concat(hes.visit_date,hes.tb_status)),11) IN (1660) THEN 'NoTB' 
+  WHEN mid(max(concat(hes.visit_date,hes.tb_status)),11) IN (1663) THEN 'Completed TB TRx' 
+  WHEN mid(max(concat(hes.visit_date,hes.tb_status)),11) IN (142177) THEN 'PresumedTB' 
+  WHEN mid(max(concat(hes.visit_date,hes.tb_status)),11) IN (1662) THEN 'On TB TRx' 
+  WHEN mid(max(concat(hes.visit_date,hes.tb_status)),11) IN (1661) THEN 'TB Diagnosed' 
+  WHEN mid(max(concat(hes.visit_date,hes.tb_status)),11) IN (160737) THEN 'Not Assessed' 
+  ELSE ''
+  END as TBStatus,
+ mid(max(concat(hes.visit_date,hes.shared_needle)),11) as SharedNeedle,
+ mid(max(concat(hes.visit_date,hes.needle_stick_injuries )),11) as NeedleStickInjuries,
+ CASE
+   WHEN mid(max(concat(hes.visit_date,hes.traditional_procedures)),11) IN (1066) THEN 'No'
+   WHEN mid(max(concat(hes.visit_date,hes.traditional_procedures)),11) IN (1065) THEN 'Yes'
+   ELSE ''
+   END as TraditionalProcedure,
+ mid(max(concat(hes.visit_date,hes.child_reasons_for_ineligibility)),11) as ChildReasonIneligibility,
+ mid(max(concat(hes.visit_date,hes.pregnant)),11) as Pregnant,
+ mid(max(concat(hes.visit_date,hes.breastfeeding_mother)),11) as BreastFeedingMother,
+ CASE
+   WHEN mid(max(concat(hes.visit_date,hes.eligible_for_test)),11) IN (1065) THEN 'Yes'
+   WHEN mid(max(concat(hes.visit_date,hes.eligible_for_test)),11) IN (1066) THEN 'No'
+   ELSE ''
+   END as EligibleForTest,
+CASE
+   WHEN  mid(max(concat(hes.visit_date,hes.referred_for_testing)),11) IN (1066) THEN 'No'
+   WHEN  mid(max(concat(hes.visit_date,hes.referred_for_testing)),11) IN (1065) THEN 'Yes'
+   ELSE ''
+   END as ReferredForTesting,
+ mid(max(concat(hes.visit_date,hes.reason_to_test)),11) as ReasonToTest,
+ mid(max(concat(hes.visit_date,hes.reason_not_to_test)),11) as ReasonNotToTest,
+ mid(max(concat(hes.visit_date,hes.reasons_for_ineligibility)),11) as ReasonForIneligibility,
+ mid(max(concat(hes.visit_date,hes.specific_reason_for_ineligibility)),11) as SpecificReasonForIneligibility,
+ mid(max(concat(eht.visit_date,eht.final_test_result)),11) as MostRecentHTSResult,
+  mid(max(concat(eht.visit_date,eht.patient_given_result)),11) as MostRecentHTSResultGiven,
+  mid(max(concat(eht.visit_date,eht.neg_referral_for)),11) as MostRecentRefferalService,
+  CASE WHEN epe.patient_id <>'' THEN 'Yes' ELSE 'No' end as PatientEnrolledInPrEP,
+  epd.unique_prep_number
+from kenyaemr_etl.etl_hts_eligibility_screening hes
+left join kenyaemr_etl.etl_patient_demographics epd ON hes.patient_id = epd.patient_id
+left join kenyaemr_etl.etl_hts_test eht ON hes.patient_id=eht.patient_id
+left join kenyaemr_etl.etl_prep_enrolment epe ON hes.patient_id=epe.patient_id
+left join openmrs.patient_identifier pi ON hes.patient_id=pi.patient_id AND pi.identifier_type in (3),
+kenyaemr_etl.etl_default_facility_info dfi
+GROUP BY hes.patient_id

@@ -1,0 +1,54 @@
+USE openmrs;
+SELECT 
+  edfi.siteCode,
+  edfi.FacilityName,
+  pbr.patient_id,
+  IF(pi.identifier_type=3,pi.identifier, NULL) AS SystemAssignedUPN,
+  pi1.identifier as PREP_EnrollmentNumber,
+  max(pbr.visit_date) as RiskAssessmentDate,
+  mid(max(concat(pbr.visit_date, pbr.sexual_partner_hiv_status)), 11) as SexualPartnerHIVStatus,
+  mid(max(concat(pbr.visit_date, pbr.sexual_partner_on_art)), 11) as SexualPartnerOnArt,
+  mid(max(concat(pbr.visit_date, pbr.risk)), 11) as Risk,
+  mid(max(concat(pbr.visit_date, pbr.high_risk_partner)), 11) as HighRiskPartner,
+  mid(max(concat(pbr.visit_date, pbr.sex_with_multiple_partners)), 11) as SexWithMultiplePartners,
+  mid(max(concat(pbr.visit_date, pbr.ipv_gbv)), 11) as IpvGbv,
+  mid(max(concat(pbr.visit_date, pbr.transactional_sex)), 11) as TransactionalSex,
+  mid(max(concat(pbr.visit_date, pbr.recent_sti_infected)), 11) as RecentSTIInfected,
+  mid(max(concat(pbr.visit_date, pbr.recurrent_pep_use)), 11) as RecurrentPepUse,
+  mid(max(concat(pbr.visit_date, pbr.recurrent_sex_under_influence)), 11) as RecurrentSexUnderInfluence,
+  mid(max(concat(pbr.visit_date, pbr.inconsistent_no_condom_use)), 11) as InconsisteNoCondomUse,
+  mid(max(concat(pbr.visit_date, pbr.sharing_drug_needles)), 11) as SharingDrugNeedle,
+  mid(max(concat(pbr.visit_date, pbr.other_reasons)), 11) as OtherReasons,
+  mid(max(concat(pbr.visit_date, pbr.other_reason_specify)), 11) as OtherReasonsSpecify,
+  mid(max(concat(pbr.visit_date, pbr.assessment_outcome)), 11) as RASTOutcome,
+  max(eht.visit_date) as MostRecentHIVTestDate,
+  mid(max(concat(eht.visit_date,eht.final_test_result)),11) as MostRecentHIVStatus,
+  DATE_FORMAT(FROM_DAYS(DATEDIFF(max(pbr.visit_date),epd.DOB)), '%Y')+0 AS AgeatRecentRASTVisit,
+  max(ept.visit_date) as MostRecentTriageWeightDate,
+  mid(max(concat(ept.visit_date,ept.weight)),11) as MostRecentWeight,
+  mid(max(concat(pbr.visit_date, pbr.willing_to_take_prep)), 11) as WillingToTakePREP,
+  mid(max(concat(pbr.visit_date, pbr.reason_not_willing)), 11) as ReasonNotWillingToTakePrep,
+  mid(max(concat(pbr.visit_date, pbr.referral_for_prevention_services)), 11) as ReferraForPrevServices,
+  mid(max(concat(pbr.visit_date, pbr.referral_facility)), 11) as ReferralReason,
+  mid(max(concat(pbr.visit_date, pbr.time_partner_hiv_positive_known)), 11) as DateKnownPartnerHIVPosStatus,
+  mid(max(concat(pbr.visit_date, pbr.partner_enrolled_ccc)), 11) as PartnerEnrolledinCare,
+  mid(max(concat(pbr.visit_date, pbr.partner_ccc_number)), 11) as PartnerCCCNumber,
+  mid(max(concat(pbr.visit_date, pbr.partner_art_start_date)), 11) as PartnerARTStartDate,
+  mid(max(concat(pbr.visit_date, pbr.other_reason_specify)), 11) as OtherReasonsSpecify,
+  mid(max(concat(pbr.visit_date, pbr.HIV_serodiscordant_duration_months)), 11) as HIVSerodiscordantDurationMonths,
+  mid(max(concat(pbr.visit_date, pbr.recent_unprotected_sex_with_positive_partner)), 11) as RecentUnprotectedSexwithHIVPosPartner,
+  mid(max(concat(pbr.visit_date, pbr.children_with_hiv_positive_partner)), 11) as NumberOfChildrenWithHIVPosPartner
+FROM kenyaemr_etl.etl_prep_behaviour_risk_assessment pbr
+LEFT OUTER JOIN  openmrs.patient_identifier pi ON pbr.patient_id=pi.patient_id AND pi.identifier_type IN (3)
+LEFT OUTER JOIN  kenyaemr_etl.etl_hts_test eht ON pbr.patient_id = eht.patient_id
+LEFT OUTER JOIN  kenyaemr_etl.etl_patient_triage ept ON pbr.patient_id = ept.patient_id
+LEFT OUTER JOIN  kenyaemr_etl.etl_patient_demographics epd ON pbr.patient_id = epd.patient_id
+left outer join(
+		SELECT 
+		   pi2.patient_id,
+		   pi2.identifier
+		FROM patient_identifier pi2 
+		where pi2.identifier_type =16
+		)as pi1 on pbr.patient_id = pi1.patient_id,
+kenyaemr_etl.etl_default_facility_info edfi
+GROUP BY pbr.patient_id;

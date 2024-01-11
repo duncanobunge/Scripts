@@ -60,13 +60,15 @@ pa.address2 as Landmark,
 		END AS CurrentWHOStage,
 	   cd.CD4Count as bCD4Count,
 	   cd.CD4CountDate as bCD4CountDate,
-       CASE
+	CASE
 		WHEN ele.lab_test=5497 THEN GROUP_CONCAT(CONCAT(ele.test_result,':',DATE(ele.date_created)) ORDER BY DATE(ele.date_created)  SEPARATOR '|')
 		END as 'CD4Result_seq',
+       tt.Scrag_seq, 
 	   bm.Weight as LastWeight,
 	   bm.Height as LastHeight,
 	   bp.BP,
-	   GROUP_CONCAT(CONCAT((fup.systolic_pressure),'/',(fup.diastolic_pressure)) ORDER BY fup.visit_date  SEPARATOR '|') AS BPSeq,
+       bp.BPDate,
+	   GROUP_CONCAT(CONCAT_WS(':',CONCAT((fup.systolic_pressure),'/',(fup.diastolic_pressure)),fup.visit_date) ORDER BY fup.visit_date  SEPARATOR '|') AS BPSeq,
   lvl.CurrVL as Latest_VL,
   lvl.VLDate as Latest_VLDate,
   -- if(ele.lab_test in (1305,856),(mid(max(concat(ele.visit_date, ele.order_reason)), 11)),null) as VLOrderUrgency,
@@ -103,8 +105,7 @@ pa.address2 as Landmark,
        ELSE 'missing'
        END as IPTCompletionstatus,
 	ipt.iptoutcomedate as IPTOutcomedate,
-   
-     
+
 	CASE 
 	  WHEN mid(max(concat(fup.visit_date, fup.nutritional_status)), 11)=114413 THEN 'overweight/obese'
 	  WHEN mid(max(concat(fup.visit_date, fup.nutritional_status)), 11)=163303 THEN 'Moderate acute malnutrition'
@@ -149,11 +150,13 @@ pa.address2 as Landmark,
 	  CONCAT(mid(max(concat(fup.visit_date, fup.systolic_pressure)), 11),'/',mid(max(concat(fup.visit_date, fup.diastolic_pressure)), 11)) as 'currentBP',
 	  max(ei.chronic_illness_onset_date) as onset_date,
 	  g.glucoseTest,
+      g.GlucoseTestDate,
 	  CASE
             WHEN mid(max(concat(eds.visit_date, eds.PHQ_9_rating)), 11)=157790 THEN 'mild depression'
             WHEN mid(max(concat(eds.visit_date, eds.PHQ_9_rating)), 11)=134017 THEN 'Moderate Major Depression'
             WHEN mid(max(concat(eds.visit_date, eds.PHQ_9_rating)), 11)=126627 THEN 'Severe Depression'
             WHEN mid(max(concat(eds.visit_date, eds.PHQ_9_rating)), 11)=134011 THEN 'Moderate Recurrent Major Depression'
+			WHEN mid(max(concat(eds.visit_date, eds.PHQ_9_rating)), 11)=1115 THEN 'Normal'
             ELSE 'Missing'
         END as PHQ9Rating,
 	  ph9.phq9_seq,
@@ -249,6 +252,12 @@ pa.address2 as Landmark,
 	   ELSE 'Missing'
 	   END AS 'PregnancyStatusatLastVisit',
 	CASE 
+           WHEN mid(max(concat(fup.visit_date,fup.breastfeeding)),11) IN (1066) THEN 'No'
+           WHEN mid(max(concat(fup.visit_date,fup.breastfeeding)),11) IN (1065) THEN 'Yes'
+           WHEN de.Gender IN('M') THEN 'NA'
+           ELSE 'Missing'
+         END AS 'BreastFeedingStatusAtLastVisit',
+	CASE 
            WHEN mid(max(concat(fup.visit_date,fup.wants_pregnancy)),11) IN (1066) THEN 'No'
            WHEN mid(max(concat(fup.visit_date,fup.wants_pregnancy)),11) IN (1065) THEN 'Yes'
            WHEN de.Gender IN('M') THEN 'NA'
@@ -315,6 +324,9 @@ select
   t.vldate,
   t.vlresult,
   t.DCM_model,
+  t.ScragTestResult,
+  t.ScragTestDate,
+  group_concat(if(t.t.ScragTestResult is not null,concat_ws(':',t.ScragTestResult,t.ScragTestDate),null) order by t.ScragTestDate separator '|')as Scrag_seq,
   group_concat(if(t.vlresult is not null,concat_ws(':',t.vlresult, t.vldate),null) order by t.vldate separator '|') as vl_seq
 from (
 select
@@ -331,11 +343,18 @@ select
      WHEN o.concept_id=856 THEN CAST(o.value_numeric AS CHAR)
      WHEN o.concept_id=1305 AND o.value_coded =1302 THEN 'LDL'
      END AS vlresult,
-     date(o.obs_datetime) as vldate
+     date(o.obs_datetime) as vldate,
+   CASE 
+	 WHEN o.concept_id=167452 AND o.value_coded=664 THEN 'Negative'
+     WHEN o.concept_id=167452 AND o.value_coded=703 THEN 'Positive'
+     WHEN o.concept_id=167452 AND o.value_coded=1067 THEN 'Unknown'
+     ELSE 'Missing'
+     END AS ScragTestResult,
+   if(o.concept_id=167452,date(obs.datetime),null)as ScragTestDate
 from openmrs.obs o 
 inner join openmrs.encounter e on o.person_id = e.patient_id
 inner join openmrs.person p on o.person_id=p.person_id
-where o.concept_id in (856,1305,164947)
+where o.concept_id in (856,1305,164947,167452)
 group by o.person_id,vldate)t
 group by t.person_id) tt on e.patient_id=tt.person_id
 LEFT OUTER JOIN (select 
@@ -434,8 +453,9 @@ group by o.person_id
 )as bm ON e.patient_id = bm.person_id
 LEFT OUTER JOIN(
   select
-o.person_id,
-s.systollic,
+  o.person_id,
+  date(e.encounter_datetime) as BPDate,
+  s.systollic,
 if(o.concept_id=5086 and max(date(e.encounter_datetime)),o.value_numeric, null) as diastollic,
 concat_ws('/',s.systollic,if(o.concept_id=5086 and max(date(e.encounter_datetime)),o.value_numeric, null)) as BP
 from obs o
@@ -525,6 +545,7 @@ LEFT OUTER JOIN(
 	SELECT
 	  o.person_id,
 	  cc.patient_id,
+      date(obs_datetime) as GlucoseTestDate,
 	  mid(max(concat(DATE(o.obs_datetime), o.value_numeric)), 11) as glucoseTest
 	FROM obs o
 	LEFT OUTER JOIN  kenyaemr_etl.etl_current_in_care cc on o.person_id=cc.patient_id
@@ -533,27 +554,22 @@ LEFT OUTER JOIN(
 ) AS g ON e.patient_id=g.patient_id
 left outer join(
 select
-  ph.person_id,
-  ph.phq9date,
-  ph.phq9result,
-  group_concat(if(ph.phq9result is not null,concat_ws(':',ph.phq9result,ph.phq9date),null) order by ph.phq9date separator '|') as phq9_seq
+  t.patient_id,
+  group_concat(concat_ws(':',t.PHQ9Rating,t.visit_date) order by t.visit_date separator '|') as phq9_seq
 from (
 select
-    o.person_id,  
-	CASE
-		    WHEN o.concept_id=157790 THEN 'mild depression'
-            WHEN o.concept_id=134017 THEN 'Moderate Major Depression'
-            WHEN o.concept_id=126627 THEN 'Severe Depression'
-            WHEN o.concept_id=134011 THEN 'Moderate Recurrent Major Depression'
-            ELSE ''
-	 END as phq9result,
-     date(o.obs_datetime) as phq9date
-from openmrs.obs o 
-inner join openmrs.encounter e on o.person_id = e.patient_id
-inner join openmrs.person p on o.person_id=p.person_id
-where o.concept_id in (134011,165110,126627,134017,157790)
-group by o.person_id,phq9date)ph
-group by ph.person_id) ph9 on e.patient_id=ph9.person_id
+eds.patient_id,
+eds.visit_date,
+   CASE
+            WHEN eds.PHQ_9_rating=157790 THEN 'mild depression'
+            WHEN eds.PHQ_9_rating=134017 THEN 'Moderate Major Depression'
+            WHEN eds.PHQ_9_rating=126627 THEN 'Severe Depression'
+            WHEN eds.PHQ_9_rating=134011 THEN 'Moderate Recurrent Major Depression'
+			WHEN eds.PHQ_9_rating=1115 THEN 'Normal'
+            ELSE 'Missing'
+    END as PHQ9Rating
+from kenyaemr_etl.etl_depression_screening eds
+)t group by t.patient_id) ph9 on e.patient_id=ph9.patient_id
 LEFT OUTER join(
 select
  x. patientID,

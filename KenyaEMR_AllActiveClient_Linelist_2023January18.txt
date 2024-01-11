@@ -1,9 +1,6 @@
 -- this scripts pulls all the active clients as at end of the immediate reported month
 -- from the linelist, use systematic sampling to generate your sample size for RDQA activities.
--- paste your sample size line-list on the EMR sheet on the RDQA tool.
--- On the Greencard sheet proceed with the manual entry from the paper greencard.
--- Finally check on your on the Scores sheets
-use openmrs;
+
 select
   cc.patient_id,
   de.unique_patient_no as 'Unique Patient ID',
@@ -18,7 +15,6 @@ select
   date_format(cc.latest_tca,'%d-%m-%Y') as 'Date Next Appointment (dd-mm-yyyy)',
   '' as DrugDosageGiven,
   mid(max(concat(fup.visit_date, fup.weight)), 11) as 'Weight(kg)',
-  GROUP_CONCAT((fup.weight) ORDER BY fup.visit_date  SEPARATOR '|') AS WeightSeq,
   mid(max(concat(fup.visit_date, fup.height)), 11) as 'Height(cm)',
   min(dr.date_started) as StartARTDate,
  mid(min(concat(dr.date_started, dr.regimen_name)), 11)as StartARTRegimen,
@@ -89,8 +85,8 @@ select
    WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=118976 THEN 'Thyroid disease'
    ELSE 'Missing'
   END as Chronic_Illness,
-  mid(max(concat(fup.visit_date, fup.systolic_pressure)), 11) as SystolicPressure,
-  mid(max(concat(fup.visit_date, fup.diastolic_pressure)), 11) as DiastolicPressure,
+  mid(max(concat(fup.visit_date, fup.systolic_pressure)), 11) as LatestSystolicPressure,
+  mid(max(concat(fup.visit_date, fup.diastolic_pressure)), 11) as LatestDiastolicPressure,
   max(ei.chronic_illness_onset_date) as onset_date,
   g.glucoseTest,
   mid(max(concat(eds.visit_date, eds.PHQ_9_rating)), 11) as PHQ9_rating,

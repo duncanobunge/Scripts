@@ -1,0 +1,442 @@
+USE openmrs;
+SET @endDate = curdate();
+SELECT
+      
+	  ehe.patient_id,
+      epd.unique_patient_no,
+      IF(pe.identifier_type=5,pe.identifier, NULL) AS NationalID_no,
+      epd.national_unique_patient_identifier as NUPI,
+      edfi.siteCode,
+      edfi.FacilityName as SiteName,
+      epd.CPIMS_unique_identifier as 'OVC_CPIMS_No',
+      epd.Gender,
+      epd.DOB,
+	  DATE_FORMAT(FROM_DAYS(DATEDIFF(max(date(ephf.visit_date)),epd.DOB)), '%Y')+0 AS AgeatLastVisit,
+	  epd.marital_status,
+	  CASE
+		 WHEN mid(max(concat(eca.visit_date,eca.ever_vaccinated)),11)=1065 THEN 'Yes'
+		 WHEN mid(max(concat(eca.visit_date,eca.ever_vaccinated)),11)=1066 THEN 'No'
+		 END as EverVaccinated,
+	  CASE
+		WHEN mid(max(concat(eca.visit_date,eca.final_vaccination_status)),11)=5585 THEN 'Fully Vaccinated'
+		ELSE 'Not Vaccinated'
+		END as FinalVaccinationStatus,
+      pa.county_district as County,
+	  pa.state_province as Sub_county,
+	  pa.address6 as Location,
+	  pa.address5 as Sub_location,
+	  pa.city_village as Village,
+	  pa.address2 as Landmark,
+	  COALESCE(ehe.date_first_enrolled_in_care, ecic.enroll_date) as DateEnrolledHIVCare,
+      ehe.date_confirmed_hiv_positive,
+	  ecic.latest_vis_date as LastVisitDate,
+	  max(ephf.next_appointment_date) AS Next_TCA,
+	  min(dr.date_started) as StartARTDate,
+	  mid(min(concat(dr.date_started, dr.regimen_name)), 11)as StartARTRegimen,
+	  mid(min(concat(dr.date_started, dr.regimen_line)), 11)as StartARTRegimenLine,
+	  max(dr.date_started) as CurrentARTStartDate,
+	  mid(max(concat(dr.date_started, dr.regimen_name)), 11) as CurrentARTRegimen,
+	  mid(max(concat(dr.date_started, dr.regimen_line)), 11) as CurrentARTRegimenLine,
+      'RegimenSeq',
+      'ReasonSwitchedRegimenSeq',
+      'NextTCASeq',
+      CASE 
+		WHEN mid(min(concat(ephf.visit_date, ephf.who_stage)), 11) IN (1204) THEN  'WHO STAGE 1 ADULT'
+		WHEN mid(min(concat(ephf.visit_date, ephf.who_stage)), 11) IN  (1205) THEN  'WHO STAGE 2 ADULT'
+		WHEN mid(min(concat(ephf.visit_date, ephf.who_stage)), 11) IN  (1206) THEN  'WHO STAGE 3 ADULT'
+		WHEN mid(min(concat(ephf.visit_date, ephf.who_stage)), 11) IN  (1207) THEN  'WHO STAGE 4 ADULT'
+		WHEN mid(min(concat(ephf.visit_date, ephf.who_stage)), 11) IN  (1220) THEN  'WHO STAGE 1 PEDS'
+		WHEN mid(min(concat(ephf.visit_date, ephf.who_stage)), 11) IN  (1221) THEN  'WHO STAGE 2 PEDS'
+		WHEN mid(min(concat(ephf.visit_date, ephf.who_stage)), 11) IN  (1222) THEN  'WHO STAGE 3 PEDS'
+		WHEN mid(min(concat(ephf.visit_date, ephf.who_stage)), 11) IN (1223) THEN  'WHO STAGE 4 PEDS'
+		WHEN mid(min(concat(ephf.visit_date, ephf.who_stage)), 11) IN (1067) THEN  'UNKNOWN'
+		END AS baselineWHOStage,
+	  CASE 
+		WHEN mid(max(concat(ephf.visit_date, ephf.who_stage)), 11) IN (1204) THEN  'WHO STAGE 1 ADULT'
+		WHEN mid(max(concat(ephf.visit_date, ephf.who_stage)), 11) IN  (1205) THEN  'WHO STAGE 2 ADULT'
+		WHEN mid(max(concat(ephf.visit_date, ephf.who_stage)), 11) IN  (1206) THEN  'WHO STAGE 3 ADULT'
+		WHEN mid(max(concat(ephf.visit_date, ephf.who_stage)), 11) IN  (1207) THEN  'WHO STAGE 4 ADULT'
+		WHEN mid(max(concat(ephf.visit_date, ephf.who_stage)), 11) IN  (1220) THEN  'WHO STAGE 1 PEDS'
+		WHEN mid(max(concat(ephf.visit_date, ephf.who_stage)), 11) IN  (1221) THEN  'WHO STAGE 2 PEDS'
+		WHEN mid(max(concat(ephf.visit_date, ephf.who_stage)), 11) IN  (1222) THEN  'WHO STAGE 3 PEDS'
+		WHEN mid(max(concat(ephf.visit_date, ephf.who_stage)), 11) IN (1223) THEN  'WHO STAGE 4 PEDS'
+		WHEN mid(max(concat(ephf.visit_date, ephf.who_stage)), 11) IN (1067) THEN  'UNKNOWN'
+		END AS CurrentWHOStage,
+       cd4.BaselineCD4Result,
+	   cd4.BaselineCD4Date,
+       cd4.RecentCD4Result,
+	   cd4.RecentCD4Date,
+       t.ScragTestResult AS RecentScragTestResult,
+       t.ScragTestDate AS RecentScragTestDate,
+       'Scrag_seq',
+	  mid(max(concat(ephf.visit_date,ephf.weight)), 11) as RecentWeight,
+      mid(max(concat(ephf.visit_date,ephf.height)), 11) as RecentHeight,
+	  mid(max(concat(ephf.visit_date,ephf.diastolic_pressure)), 11) as RecentDiastolicBP,
+      mid(max(concat(ephf.visit_date,ephf.systolic_pressure)), 11) as RecentsystolicBP,
+      vl.RecentVLResult,
+      vl.RecentVLDate,
+	  vl.BaselineVLResult,
+      vl.BaselineVLDate,
+      vl.RecentVLOrderReason,
+	  'VL_Sequence',
+	CASE
+        WHEN mid(max(concat(ephf.visit_date,ephf.tb_status)), 11)=1663 THEN 'Completed TB RX'
+        WHEN mid(max(concat(ephf.visit_date,ephf.tb_status)), 11)=1662 THEN 'On TB RX'
+        WHEN mid(max(concat(ephf.visit_date,ephf.tb_status)), 11)=1661 THEN 'TB Diagnosed'
+        WHEN mid(max(concat(ephf.visit_date,ephf.tb_status)), 11)=1660 THEN 'No TB signs'
+        WHEN mid(max(concat(ephf.visit_date,ephf.tb_status)), 11)=142177 THEN 'Suspected TB'
+        WHEN mid(max(concat(ephf.visit_date,ephf.tb_status)), 11)=160737 THEN 'Not Assessed of TB'
+        ELSE 'Missing'
+        END as TBScreeningAtLastVisit,
+	CASE
+		WHEN mid(max(concat(ephf.visit_date,ephf.differentiated_care)), 11)=164942 THEN 'Standard Care'
+		WHEN mid(max(concat(ephf.visit_date,ephf.differentiated_care)), 11)=164943 THEN 'Fast Track care'
+		WHEN mid(max(concat(ephf.visit_date,ephf.differentiated_care)), 11)=164944 THEN 'Community ART distribution - HCW led'
+		WHEN mid(max(concat(ephf.visit_date,ephf.differentiated_care)), 11)=164945 THEN 'Community ART distribution – Peer led'
+		WHEN mid(max(concat(ephf.visit_date,ephf.differentiated_care)), 11)=164946 THEN 'Facility ART distribution group'
+		END AS 'DCM_model',
+	min(ipt.visit_date) as IPTStartdate,   
+	CASE 
+       WHEN ipto.outcome IN (983) THEN 'WEIGHT CHANGE'
+       WHEN ipto.outcome IN (1267) THEN 'COMPLETED'
+       WHEN ipto.outcome IN (102) THEN 'Toxicity_Drug'
+       WHEN ipto.outcome IN (5622) THEN 'Other'
+       WHEN ipto.outcome IN (112141) THEN 'TUBERCULOSIS'
+	   WHEN ipto.outcome IN (160034) THEN 'Died'
+       ELSE 'missing'
+       END as IPTCompletionstatus,
+	 max(ipto.visit_date) as IPTOutcomedate,
+     CASE 
+		  WHEN mid(max(concat(ephf.visit_date, ephf.nutritional_status)), 11)=114413 THEN 'overweight/obese'
+		  WHEN mid(max(concat(ephf.visit_date, ephf.nutritional_status)), 11)=163303 THEN 'Moderate acute malnutrition'
+		  WHEN mid(max(concat(ephf.visit_date, ephf.nutritional_status)), 11)=163302 THEN 'Severe acute malnutrition'
+		  WHEN mid(max(concat(ephf.visit_date, ephf.nutritional_status)), 11)=1115 THEN 'Normal'
+		  ELSE 'Missing'
+		  END AS 'NutritionStatus',
+	mid(max(concat(ephf.visit_date, ephf.general_examination)), 11) as General_examination,
+	CASE
+		WHEN mid(max(concat(ephf.visit_date, ephf.has_chronic_illnesses_cormobidities)), 11)=1066 THEN 'No'
+		WHEN mid(max(concat(ephf.visit_date, ephf.has_chronic_illnesses_cormobidities)), 11)=1065 THEN 'Yes'
+		ELSE 'Missing'
+		END as 'ChronicCormobidities',
+	CASE
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=149019 THEN 'Alzheimer disease'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=148423 THEN 'Arthritis'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=153754 THEN 'Asthma'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=159351 THEN 'Cancer'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=119270 THEN 'Cardio Vascular'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=120637 THEN 'Chronic Hepatitis'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=145438 THEN 'Chronic Kidney Disease'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=1295   THEN 'Chronic Onstructive pulmonary Disease'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=120576 THEN 'Chronic Renal Failure'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=119692 THEN 'Cystic Fibrosis'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=120291 THEN 'Deafness and Hearing Impairment'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=119481 THEN 'Diabetes'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=118631 THEN 'Endometriosis'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=117855 THEN 'Epilepsy'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=117789 THEN 'Glaucoma'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=139071 THEN 'HeartDisease'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=115728 THEN 'Hyperlipidaemia'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=117399 THEN 'Hypertension'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=117321 THEN 'Hypothyroidism'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=151342 THEN 'Mental illness'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=133687 THEN 'Multiple Sclerosis'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=115115 THEN 'Obesity'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=114662 THEN 'Osteoporosis'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=117703 THEN 'Sickle cell Anaemia'
+		   WHEN mid(max(concat(ei.visit_date, ei.chronic_illness)), 11)=118976 THEN 'Thyroid disease'
+		   ELSE 'Missing'
+		   END as 'ChronicIllness',
+	   max(ei.chronic_illness_onset_date) as onset_date,
+       g.RBSTestResult as GlucoseTest,
+       g.RBSTestDate as GlucoseTestDate,
+       CASE
+            WHEN eds.PHQ_9_rating=157790 THEN 'mild depression'
+            WHEN eds.PHQ_9_rating=134017 THEN 'Moderate Major Depression'
+            WHEN eds.PHQ_9_rating=126627 THEN 'Severe Depression'
+            WHEN eds.PHQ_9_rating=134011 THEN 'Moderate Recurrent Major Depression'
+			WHEN eds.PHQ_9_rating=1115 THEN 'Normal'
+            ELSE 'Missing'
+            END as PHQ9Rating,
+	  max(eds.visit_date) as 'RecentDepressionScreeningDate',
+	  mid(max(concat(eccs.visit_date, eccs.visit_type)), 11) as CCSVisitType,
+	  mid(max(concat(eccs.visit_date, eccs.screening_type)), 11) as CCSscreening_type,
+      mid(max(concat(eccs.visit_date, eccs.screening_method)), 11) as CCSscreening_method,
+      mid(max(concat(eccs.visit_date, eccs.screening_result)), 11) as CCSscreening_result,
+      mid(max(concat(eccs.visit_date, eccs.treatment_method)), 11) as CCStreatment_method,
+      max(eccs.visit_date) as CCSlatestScreeningDate,
+	CASE
+        WHEN mid(max(concat(adas.visit_date, adas.smoking_frequency)), 11) IN (163200) THEN 'Unknown if ever smoked'
+        WHEN mid(max(concat(adas.visit_date, adas.smoking_frequency)), 11) IN (163199) THEN 'Current every day smoker'
+        WHEN mid(max(concat(adas.visit_date, adas.smoking_frequency)), 11) IN (152807) THEN 'Former Smoker'
+        WHEN mid(max(concat(adas.visit_date, adas.smoking_frequency)), 11) IN (163196) THEN 'Current light tobacco smoker'
+        WHEN mid(max(concat(adas.visit_date, adas.smoking_frequency)), 11) IN (163195) THEN 'Current heavy tobacco smoker'
+        WHEN mid(max(concat(adas.visit_date, adas.smoking_frequency)), 11) IN (152722) THEN 'Smoker'
+        WHEN mid(max(concat(adas.visit_date, adas.smoking_frequency)), 11) IN (163197) THEN 'Current some day smoker'
+        ELSE 'Missing'
+        END as smoking_frequency,
+	 CASE 
+        WHEN mid(max(concat(adas.visit_date, adas.drugs_use_frequency)), 11) IN (1090) THEN 'Never'
+        WHEN mid(max(concat(adas.visit_date, adas.drugs_use_frequency)), 11) IN (1091) THEN 'Monthly or less'
+        WHEN mid(max(concat(adas.visit_date, adas.drugs_use_frequency)), 11) IN (1092) THEN '2 to 4 times a month'
+        WHEN mid(max(concat(adas.visit_date, adas.drugs_use_frequency)), 11) IN (1093) THEN '2 to 3 times a week'
+        WHEN mid(max(concat(adas.visit_date, adas.drugs_use_frequency)), 11) IN (1094) THEN '4 to 5 times a week'
+        WHEN mid(max(concat(adas.visit_date, adas.drugs_use_frequency)), 11) IN (1095) THEN '6 or more times a week'
+        ELSE 'Missing'
+        END as drugs_use_frequency,
+      CASE 
+	   WHEN mid(max(concat(adas.visit_date,  adas.alcohol_drinking_frequency)), 11) IN (1090) THEN 'Never' 
+       WHEN mid(max(concat(adas.visit_date,  adas.alcohol_drinking_frequency)), 11) IN (1091) THEN 'Monthly or less' 
+       WHEN mid(max(concat(adas.visit_date,  adas.alcohol_drinking_frequency)), 11) IN (1092) THEN '2 to 4 times a month'
+       WHEN mid(max(concat(adas.visit_date,  adas.alcohol_drinking_frequency)), 11) IN (1093) THEN '2 to 3 times a week'
+       WHEN mid(max(concat(adas.visit_date,  adas.alcohol_drinking_frequency)), 11) IN (1094) THEN '4 to 5 times a week' 
+       WHEN mid(max(concat(adas.visit_date,  adas.alcohol_drinking_frequency)), 11) IN (1095) THEN '6 or more times a week' 
+       ELSE 'Missing'
+       END as alcohol_drinking_frequency,
+	  max(adas.visit_date) as CagelatestScreeningDate,
+    CASE
+       WHEN mid(max(concat(ephf.visit_date,ephf.pwp_disclosure)),11)=1065 THEN 'Yes'
+       WHEN mid(max(concat(ephf.visit_date,ephf.pwp_disclosure)),11)=1066 THEN 'No'
+       WHEN mid(max(concat(ephf.visit_date,ephf.pwp_disclosure)),11)=1175 THEN 'NA'
+       END AS pwp_disclosure,
+	CASE
+        WHEN mid(max(concat(ephf.visit_date,pwp_partner_tested)),11)=1065 THEN 'Yes'
+        WHEN mid(max(concat(ephf.visit_date,pwp_partner_tested)),11)=1066 THEN 'No'
+        WHEN mid(max(concat(ephf.visit_date,pwp_partner_tested)),11)=1175  THEN 'NA'
+        END AS pwp_partner_tested,
+	CASE
+        WHEN mid(max(concat(ephf.visit_date,ephf.condom_provided)),11)=1065 THEN 'YES'
+        WHEN mid(max(concat(ephf.visit_date,ephf.condom_provided)),11)=1066 THEN 'No'
+        WHEN mid(max(concat(ephf.visit_date,ephf.condom_provided)),11)=1175 THEN 'NA'
+        END AS condom_provided,
+	CASE
+        WHEN mid(max(concat(ephf.visit_date,ephf.substance_abuse_screening)),11)=1065 THEN 'Yes'
+        WHEN mid(max(concat(ephf.visit_date,ephf.substance_abuse_screening)),11)=1066 THEN 'No'
+        WHEN mid(max(concat(ephf.visit_date,ephf.substance_abuse_screening)),11)=1175 THEN 'NA'
+        END AS substance_abuse_screening,
+	CASE
+        WHEN mid(max(concat(ephf.visit_date,ephf. screened_for_sti)),11)=664 THEN 'Negative'
+		WHEN mid(max(concat(ephf.visit_date,ephf. screened_for_sti)),11)=1118 THEN 'Not Done'
+		WHEN mid(max(concat(ephf.visit_date,ephf. screened_for_sti)),11)=1065 THEN ''
+        end as  screened_for_sti,
+   CASE 
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=5279 THEN 'Injectable contraceptives'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=5278 THEN 'Diaphragm'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=5275 THEN 'Intrauterine device'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=5276 THEN 'Female sterilization'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=190 THEN 'Condoms'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=780 THEN 'Oral contraception'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=5277 THEN 'Natural family planning'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=159524 THEN 'Sexual abstinence'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=78796 THEN 'LEVONORGESTREL'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=1472 THEN 'Tubal ligation procedure'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=907 THEN 'MEDROXYPROGESTERONE ACETATE'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=1489 THEN 'Vasectomy'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=1359 THEN 'NORPLANT (IMPLANTABLE CONTRACEPTIVE)'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=136452 THEN 'IUD Contraception'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=159837 THEN 'Hysterectomy'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=160570 THEN 'Emergency contraceptive pills'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=136163 THEN 'Lactational amenorrhea'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=159589 THEN 'Implantable contraceptive (unspecified type)'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.family_planning_method)), 11)=5622 THEN 'Other (specify)'
+	   ELSE 'Missing'
+	   END AS 'FPMethodatLastVisit',
+	CASE 
+           WHEN mid(max(concat(ephf.visit_date,ephf.pregnancy_status)),11) IN (1066) THEN 'No'
+           WHEN mid(max(concat(ephf.visit_date,ephf.pregnancy_status)),11) IN (1065) THEN 'Yes'
+           WHEN mid(max(concat(ephf.visit_date,ephf.pregnancy_status)),11) IN (1067) THEN 'Unknown'
+           ELSE 'Missing'
+           END AS 'PregnancyStatusatLastVisit',
+	CASE 
+           WHEN mid(max(concat(ephf.visit_date,ephf.breastfeeding)),11) IN (1066) THEN 'No'
+           WHEN mid(max(concat(ephf.visit_date,ephf.breastfeeding)),11) IN (1065) THEN 'Yes'
+           WHEN epd.Gender IN('M') THEN 'NA'
+           ELSE 'Missing'
+           END AS 'BreastFeedingStatusAtLastVisit',
+	CASE 
+           WHEN mid(max(concat(ephf.visit_date,ephf.wants_pregnancy)),11) IN (1066) THEN 'No'
+           WHEN mid(max(concat(ephf.visit_date,ephf.wants_pregnancy)),11) IN (1065) THEN 'Yes'
+           WHEN epd.Gender IN('M') THEN 'NA'
+           ELSE 'Missing'
+           END AS 'Pregnancy intention assessment at last visit',
+    ovc.visit_date as OVCEnrollmentdate,
+	ovc.client_enrolled_cpims,
+	ovc.caregiver_enrolled_here,
+	CASE WHEN kenyaemr_etl.ovc.caregiver_enrolled_here IN ('NO') THEN 'No' ELSE 'Yes' END AS Paired,
+	max(otz.visit_date) as OTZEnrollmentDate,
+    CASE
+       WHEN mid(max(concat(ephf.visit_date,ephf.stability)), 11)=1 THEN 'Yes'
+       WHEN mid(max(concat(ephf.visit_date,ephf.stability)), 11)=2 THEN 'No'
+       ELSE 'Missing'
+       END as PatientEstablished,
+	 CASE
+	   WHEN ehe.patient_type IN (164144) THEN 'New client'
+	   WHEN ehe.patient_type IN (160563) THEN 'Transfer In'
+	   WHEN ehe.patient_type IN (164097) THEN 'Return to Care'
+	   WHEN ehe.patient_type IN (164931) THEN 'Transit Patient'
+	   ELSE 'Missing'
+	   END AS  PatientType,
+	CASE
+       WHEN mid(max(concat(ephf.visit_date,ephf.arv_adherence)), 11)=159407 THEN 'Poor'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.arv_adherence)), 11)=159405 THEN 'Good'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.arv_adherence)), 11)=159406 THEN 'Fair'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.arv_adherence)), 11)=164077 THEN 'Very good'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.arv_adherence)), 11)=164076 THEN 'Excellent'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.arv_adherence)), 11)=1067 THEN 'Unknown'
+       ELSE 'Missing'
+       END as ArvAdherence,
+	CASE
+       WHEN mid(max(concat(ephf.visit_date,ephf.appointment_consent)), 11)=1065 THEN 'Yes'
+	   WHEN mid(max(concat(ephf.visit_date,ephf.appointment_consent)), 11)=1066 THEN 'No'
+       ELSE 'Missing'
+       END as AppointmentReminderMessageConsent,
+	CASE
+        WHEN mid(max(concat(ephf.visit_date,ephf.next_appointment_reason)), 11)=160523 THEN 'Follow-up Visit'
+        WHEN mid(max(concat(ephf.visit_date,ephf.next_appointment_reason)), 11)=160446 THEN 'Antenatal Visit'
+        WHEN mid(max(concat(ephf.visit_date,ephf.next_appointment_reason)), 11)=160528 THEN 'PMTCT Visit'
+        WHEN mid(max(concat(ephf.visit_date,ephf.next_appointment_reason)), 11)=160527 THEN 'Kaposis Sarcoma Visit'
+        WHEN mid(max(concat(ephf.visit_date,ephf.next_appointment_reason)), 11)=159893 THEN 'Postnatal Visit'
+        WHEN mid(max(concat(ephf.visit_date,ephf.next_appointment_reason)), 11)=160524 THEN 'ART Visit'
+		WHEN mid(max(concat(ephf.visit_date,ephf.next_appointment_reason)), 11)=160521 THEN 'Pharmacy Visit'
+        WHEN mid(max(concat(ephf.visit_date,ephf.next_appointment_reason)), 11)=160529 THEN 'TB Visit'
+        WHEN mid(max(concat(ephf.visit_date,ephf.next_appointment_reason)), 11)=160526 THEN 'EID Visit'
+        WHEN mid(max(concat(ephf.visit_date,ephf.next_appointment_reason)), 11)=160525 THEN 'Pre-ART Visit'
+        WHEN mid(max(concat(ephf.visit_date,ephf.next_appointment_reason)), 11)=160522 THEN 'Emergency Visit'
+        WHEN mid(max(concat(ephf.visit_date,ephf.next_appointment_reason)), 11)=1283 THEN 'Lab Visit'
+        ELSE 'Missing'
+        END as NextAppointmentReason,
+    CASE
+		   WHEN mid(max(concat(ephf.visit_date, ephf.person_present)), 11)=978 THEN 'Self'
+		   WHEN mid(max(concat(ephf.visit_date, ephf.person_present)), 11)=161642 THEN 'Treatment Supporter'
+		   WHEN mid(max(concat(ephf.visit_date, ephf.person_present)), 11)=159802 THEN 'Documentation'
+		   ELSE 'Missing'
+           END as 'PatientAttendanceStatus',
+	mid(max(concat(ephf.visit_date,ephf.anc_number)), 11) as RecentANCNumOnGeenCard,
+    CASE
+		  WHEN mid(max(concat(eme.visit_date,eme.service_type)),11)=1622 THEN 'ANC'
+		  WHEN mid(max(concat(eme.visit_date,eme.service_type)),11)=1623 THEN 'PNC'
+		  WHEN mid(max(concat(eme.visit_date,eme.service_type)),11)=164835 THEN 'L&D'
+		  END as MCHServiceType,
+	eme.anc_number,
+	date(eme.first_anc_visit_date) as RecentANCVisitEnrollmentDate,
+    max(mav.visit_date) as LatestANCVisitEncounterDate,
+    max(mpv.visit_date) as LatestPNCVisitEncounterDate,
+    ecic.date_discontinued,
+	ecic.effective_disc_date,
+	CASE
+		   WHEN ecic.started_on_drugs IS NOT NULL THEN 'Active'
+		   WHEN d.discontinuation_reason=159492 THEN 'Transfer out'
+		   WHEN d.discontinuation_reason=5240 THEN 'Lost to followup'
+		   WHEN d.discontinuation_reason=160034 THEN 'Died'
+		   ELSE 'Not Active'
+           END AS 'ARTStatus',
+	 rs.RecentRiskScore,
+	 rs.CurrentMLEvaluationDate,
+	 rs.RecentRiskCategory,
+	 rs.RecentRiskFactors
+FROM kenyaemr_etl.etl_hiv_enrollment ehe
+LEFT OUTER JOIN kenyaemr_etl.etl_current_in_care ecic ON ehe.patient_id = ecic.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_patient_demographics epd ON ehe.patient_id = epd.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_patient_hiv_followup ephf ON ehe.patient_id = ephf.patient_id
+LEFT OUTER JOIN  kenyaemr_etl.etl_drug_event dr ON ehe.patient_id = dr.patient_id AND dr.program IN ('HIV')
+LEFT OUTER JOIN kenyaemr_etl.etl_ipt_initiation ipt ON ehe.patient_id = ipt.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_ipt_outcome  ipto ON ehe.patient_id = ipto.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_depression_screening eds ON ehe.patient_id  = eds.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_alcohol_drug_abuse_screening  adas ON ehe.patient_id=adas.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_cervical_cancer_screening eccs ON ehe.patient_id=eccs.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_allergy_chronic_illness ei ON ehe.patient_id = ei.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_covid19_assessment eca ON ehe.patient_id = eca.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_mch_enrollment eme ON ehe.patient_id = eme.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_mch_postnatal_visit mpv ON ehe.patient_id=mpv.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_mch_antenatal_visit mav ON ehe.patient_id=mav.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_ovc_enrolment ovc  ON ehe.patient_id = ovc.patient_id
+LEFT OUTER JOIN kenyaemr_etl.etl_otz_enrollment otz  ON ehe.patient_id = otz.patient_id
+LEFT OUTER JOIN person_address pa on ehe.patient_id=pa.person_id
+LEFT OUTER JOIN patient_identifier pe ON ehe.patient_id=pe.patient_id AND pe.identifier_type in (5,9)
+LEFT OUTER JOIN (
+        SELECT
+		   o.person_id,
+		   CASE 
+			 WHEN mid(max(concat(date(o.obs_datetime),o.value_coded)),11)=664 THEN 'Negative'
+			 WHEN mid(max(concat(date(o.obs_datetime),o.value_coded)),11)=703 THEN 'Positive'
+			 WHEN mid(max(concat(date(o.obs_datetime),o.value_coded)),11)=1067 THEN 'Unknown'
+			 ELSE 'Missing'
+			 END AS ScragTestResult,
+		   max(date(o.obs_datetime)) AS ScragTestDate
+	FROM openmrs.obs o 
+	INNER JOIN openmrs.encounter e ON o.person_id = e.patient_id
+	INNER JOIN openmrs.person p ON o.person_id=p.person_id
+	where o.concept_id in (167452)
+	group by o.person_id
+)as t ON ehe.patient_id=t.person_id
+LEFT OUTER JOIN (
+				SELECT
+					  le.patient_id,
+					  CASE
+						WHEN mid(min(concat(date(le.date_created), le.test_result)), 11)=1302 THEN 'LDL'
+						ELSE mid(min(concat(date(le.date_created), le.test_result)), 11)
+						END as BaselineVLResult,
+					  min(date(le.date_created)) as BaselineVLDate,
+					  CASE
+						WHEN mid(max(concat(date(le.date_created), le.test_result)), 11)=1302 THEN 'LDL'
+						ELSE mid(max(concat(date(le.date_created), le.test_result)), 11)
+						END as RecentVLResult,
+						max(date(le.date_created)) as RecentVLDate,
+					  CASE
+							 WHEN mid(max(concat(le.visit_date, le.order_reason)), 11) IN (161236) THEN 'Routine'
+							 WHEN mid(max(concat(le.visit_date, le.order_reason)), 11) IN (160032) THEN 'Failure of category I treatment'
+							 WHEN mid(max(concat(le.visit_date, le.order_reason)), 11) IN (843) THEN 'Regimen Failure'
+							 WHEN mid(max(concat(le.visit_date, le.order_reason)), 11) IN (162080) THEN 'Initial'
+							 WHEN mid(max(concat(le.visit_date, le.order_reason)), 11) IN (1259) THEN 'Change of Regimen'
+							 WHEN mid(max(concat(le.visit_date, le.order_reason)), 11) IN (159882) THEN 'Breastfeeding'
+							 WHEN mid(max(concat(le.visit_date, le.order_reason)), 11) IN (1434) THEN 'Currently Pregnant'
+							 END as RecentVLOrderReason
+				FROM kenyaemr_etl.etl_laboratory_extract le
+				WHERE  le.lab_test IN (1305,856)
+				GROUP BY le.patient_id
+) as vl ON ehe.patient_id = vl.patient_id
+LEFT OUTER JOIN (
+				SELECT
+					  ele.patient_id,
+					  mid(min(concat(date(ele.date_created), ele.test_result)), 11) as BaselineCD4Result,
+					  min(date(ele.date_created)) as BaselineCD4Date,
+					  mid(max(concat(date(ele.date_created), ele.test_result)), 11) as RecentCD4Result,
+					  max(date(ele.date_created)) as RecentCD4Date
+				FROM kenyaemr_etl.etl_laboratory_extract ele
+				WHERE  ele.lab_test IN (5497)
+				GROUP BY ele.patient_id
+) as cd4 ON ehe.patient_id = cd4.patient_id
+ LEFT OUTER JOIN(
+			SELECT
+				  o.person_id,
+				  date(obs_datetime) as RBSTestDate,
+				  mid(max(concat(DATE(o.obs_datetime), o.value_numeric)), 11) as RBSTestResult
+			FROM openmrs.obs o
+			WHERE o.concept_id IN (887,160912)
+			GROUP BY o.person_id
+) AS g ON ehe.patient_id=g.person_id
+LEFT OUTER JOIN(
+    select
+		 prs.patient_id,
+		 mid(max(concat(prs.evalution_date,prs.risk_score)),11) as RecentRiskScore,
+		 max(prs.evaluation_date) as CurrentMLEvaluationDate,
+		 mid(max(concat(prs.evalution_date,prs.description)),11) as RecentRiskCategory,
+		 mid(max(concat(prs.evalution_date,prs.risk_factors)),11) as RecentRiskFactors
+from kenyaemr_ml_patient_risk_score prs
+inner join patient_identifier pi ON prs.patient_id = pi.patient_id
+where pi.identifier_type in (6)
+)rs ON ehe.patient_id = rs.patient_id
+LEFT OUTER JOIN(  
+							SELECT
+                                 patient_id, 
+                                 coalesce(date(effective_discontinuation_date),visit_date) visit_date,
+                                 max(date(effective_discontinuation_date)) as effective_disc_date,
+                                 discontinuation_reason
+							FROM kenyaemr_etl.etl_patient_program_discontinuation
+							WHERE date(visit_date) <= date(@endDate) and program_name='HIV'
+							GROUP BY patient_id
+                             ) d ON ephf.patient_id = d.patient_id,
+kenyaemr_etl.etl_default_facility_info edfi
+GROUP BY ehe.patient_id
+
+

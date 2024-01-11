@@ -1,0 +1,38 @@
+USE openmrs;
+SET @startDate ='2024-01-01';
+SET @endDate='2024-01-31';
+SELECT 
+    eds.patient_id,
+    epd.unique_patient_no,
+    epd.DOB,
+    epd.Gender,
+    MAX(eds.visit_date) AS MstRcntDepreScrnDate,
+    MID(MAX(CONCAT(eds.visit_date, eds.PHQ_9_rating)),
+        11) AS PHQ9Rating,
+    MID(MAX(CONCAT(ads.visit_date,
+                ads.alcohol_drinking_frequency)),
+        11) AS AlcoholDrinkingFrequency,
+    MID(MAX(CONCAT(ads.visit_date, ads.smoking_frequency)),
+        11) AS SmokingFrequency,
+    MID(MAX(CONCAT(ads.visit_date, ads.drugs_use_frequency)),
+        11) AS DrugUseFrequency,
+    MAX(ads.visit_date) AS MostRecentAlcoDrugSmokScrngDate,
+    MID(MAX(CONCAT(gad.visit_date,gad.assessment_outcome)),11) as Gad7AssessmentOutcome,
+    MAX(gad.visit_date) as MstRcntGad7ScrngDate,
+    MAX(fup.visit_date) AS LastHIVClinicalVisDate,
+    MAX(fup.next_appointment_date) AS NextTCA
+FROM
+    kenyaemr_etl.etl_depression_screening eds
+        INNER JOIN
+    kenyaemr_etl.etl_current_in_care ecic ON eds.patient_id = ecic.patient_id
+        INNER JOIN
+    kenyaemr_etl.etl_patient_demographics epd ON eds.patient_id = epd.patient_id
+        INNER JOIN
+    kenyaemr_etl.etl_patient_hiv_followup fup ON eds.patient_id = fup.patient_id
+        LEFT OUTER JOIN
+    kenyaemr_etl.etl_alcohol_drug_abuse_screening ads ON eds.patient_id = ads.patient_id
+    LEFT OUTER JOIN
+    kenyaemr_etl.etl_generalized_anxiety_disorder gad ON eds.patient_id = gad.patient_id
+WHERE
+    eds.visit_date BETWEEN @startDate AND @endDate
+GROUP BY eds.patient_id

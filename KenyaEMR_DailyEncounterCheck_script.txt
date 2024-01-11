@@ -1,0 +1,19 @@
+use openmrs;
+set @startDate='2022-11-08';
+set @endDate='2022-11-08';
+select
+   l.name,
+   e.patient_id,
+   de.unique_patient_no,
+   et.name,
+   date(e.encounter_datetime) as EncounterDate,
+   date(e.date_created) as DateCreatedEncounter,
+   u.username as provider
+from encounter e
+inner join users u ON e.creator = u.user_id
+left outer join kenyaemr_etl.etl_patient_demographics de ON e.patient_id=de.patient_id
+inner join encounter_type et ON e.encounter_type = et.encounter_type_id 
+inner join location l ON e.location_id=l.location_id
+where date(encounter_datetime) between @startDate and @endDate
+group by 
+e.patient_id,e.creator;

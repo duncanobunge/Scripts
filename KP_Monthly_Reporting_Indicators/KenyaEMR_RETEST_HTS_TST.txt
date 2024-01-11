@@ -1,6 +1,6 @@
 use kenyaemr_etl;
-set @endDate='2022-04-30';
-set @startDate='2022-04-01';
+set @endDate='2023-05-01';
+set @startDate='2023-05-31';
 select
  ecv.client_id,
  de.Gender,

@@ -1,0 +1,23 @@
+use openmrs;
+set @startDate='2023-03-01';
+set @endDate='2023-03-31';
+select
+   eed.patient_id,
+   de.unique_patient_no,
+   eed.visit_date,
+   eed.session_number,
+   eed.first_session_date,
+   CASE
+    WHEN ele.lab_test=1305 THEN 'LDL' 
+    WHEN ele.lab_test=856 and mid(max(concat(date(ele.date_created), ele.test_result)), 11)=1302 THEN 'LDL'
+    WHEN ele.lab_test=856 THEN mid(max(concat(date(ele.date_created), ele.test_result)), 11)
+    END as CurrentVL,
+   eed.arv_adherence,
+   eed.adherence_plan,
+   eed.next_appointment_date
+from kenyaemr_etl.etl_enhanced_adherence eed
+inner join kenyaemr_etl.etl_patient_demographics de ON eed.patient_id=de.patient_id
+inner join kenyaemr_etl.etl_laboratory_extract ele ON eed.patient_id=ele.patient_id
+where eed.visit_date between @startDate AND @endDate 
+group by eed.patient_id
+Having CurrentVL > 200

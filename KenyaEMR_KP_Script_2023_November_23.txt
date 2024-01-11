@@ -1,0 +1,146 @@
+use openmrs;
+SELECT
+ epp.patient_id,
+ ec.unique_identifier as client_id,
+ edfi.siteCode as mfl_code,
+ epd.Gender,
+ epd.education_level,
+ epd.marital_status,
+pa.county_district as County,
+pa.state_province as Sub_county,
+pa.address4 as Ward,
+pa.address6 as Location,
+pa.address5 as Sub_location,
+pa.city_village as Village,
+pa.address2 as Landmark, 
+ CASE
+  WHEN ec.key_population_type in ('FSW') THEN ece.year_started_sex_work
+  WHEN ec.key_population_type in ('MSM') THEN ece.year_started_sex_with_men
+  WHEN ec.key_population_type in ('PWID','PWUD') THEN  ece.year_started_drugs
+  ELSE 'Missing'
+  end as duration_as_kp, 
+ ec.frequent_hotspot_name,
+ ec.frequent_hotspot_type,
+ date_format(epd.DOB,'%m/%d/%Y') as date_of_birth,
+ date_format(epp.date_enrolled,'%m/%d/%Y') as date_of_enrollment,
+ DATE_FORMAT(FROM_DAYS(DATEDIFF(epp.date_enrolled,epd.DOB)),'%Y')+0 as age_at_enrollment,
+ ffx.FFxTypologies,
+ ece.ever_tested_for_hiv,
+ ece.share_test_results as reported_hiv_status_at_enrolment,
+ mid(max(concat(eht.visit_date,eht.final_test_result)),11) as current_hiv_test_result,
+ date_format(eht.visit_date,'%m/%d/%Y') as current_hiv_test_date,
+ CASE
+	  WHEN mid(max(concat(ecv.visit_date,ecv.male_condoms_no)),11) NOT IN (" ") then 'Yes'
+	  WHEN mid(max(concat(ecv.visit_date,ecv.female_condoms_no)),11) NOT IN (" ") then 'Yes'
+	  WHEN mid(max(concat(ecv.visit_date,ecv.male_condoms_no)),11) NOT IN (" ") and mid(max(concat(ecv.visit_date,ecv.female_condoms_no)),11) NOT IN (" ") then 'Yes'
+	  ELSE 'No'
+	  END AS condom_use,
+mid(max(concat(ecv.visit_date,ecv.male_condoms_no)),11) as no_male_condoms,
+mid(max(concat(ecv.visit_date,ecv.female_condoms_no)),11) as no_female_condoms,
+ CASE
+	  WHEN  mid(max(concat(ecv.visit_date,ecv.lubes_no)),11) NOT IN (" ") then 'Yes'
+	  else  'No'
+	  end as used_lubricant,
+ mid(max(concat(ecv.visit_date,ecv.lubes_no)),11) as no_lubes,
+ min(epe.visit_date) as date_initiated_prep,
+ GROUP_CONCAT((ecv.sti_results) ORDER BY ecv.visit_date  SEPARATOR '|') AS sti_screening_results_seq,
+ GROUP_CONCAT(DISTINCT((ecv.visit_date)) ORDER BY ecv.visit_date  SEPARATOR '|') AS sti_screening_dates_seq,
+ mid(max(concat(ecv.visit_date,ecv.sti_results)),11) as Current_STI_screening_result,
+ max(ecv.visit_date) as Current_STI_screening_date,
+ date_format(min(dr.date_started),'%m/%d/%Y') as 'Date_of_ART_Initiation(dd/mm/yyyy)',
+ CASE
+	  when min(dr.date_started) NOT IN (" ") THEN date_format(ehe.date_confirmed_hiv_positive,'%m/%d/%Y')
+	  else 'Missing'
+	  end as 'Date_confirmed_HIV',
+ 'Not captured in the EMR' as 'Baseline # of Sexual/Needle Exchange Partners in Past 12 Months',
+ 'Not captured in the EMR' as 'Current # of Sexual/Needle Exchange Partners in Past 12 Months',
+ 	mid(max(concat(ecv.visit_date,ecv.service_delivery_model)),11) service_delivery_model,
+	mid(max(concat(ecv.visit_date,ecv.sti_referred)),11) as sti_referred,
+	mid(max(concat(ecv.visit_date,ecv.sti_referred_text)),11) as sti_referred_text,
+	mid(max(concat(ecv.visit_date,ecv.tb_screened)),11)as tb_screened,
+	mid(max(concat(ecv.visit_date,ecv.tb_results)),11) as tb_result,
+	mid(max(concat(ecv.visit_date,ecv.tb_treated)),11) as tb_treated,
+	mid(max(concat(ecv.visit_date,ecv.self_tested)),11) as self_tested,
+	mid(max(concat(ecv.visit_date,ecv.exposure_type)),11) as exposure_type,
+	mid(max(concat(ecv.visit_date,ecv.pep_eligible)),11) as pep_eligible,
+	mid(max(concat(ecv.visit_date,ecv.received_vl_results)),11) as received_vl_result,
+	mid(max(concat(ecv.visit_date,ecv.vl_results)),11) as vl_result,
+	mid(max(concat(ecv.visit_date,ecv.hepatitisC_screened)),11) as hepatitisC_screened,
+	mid(max(concat(ecv.visit_date,ecv.hepatitisC_results)),11) as hepatitisC_results,
+	mid(max(concat(ecv.visit_date,ecv.hepatitisC_treated)),11) as hepatitisC_TRx,
+	mid(max(concat(ecv.visit_date,ecv.hepatitisB_screened)),11) as hepatitisB_screened,
+	mid(max(concat(ecv.visit_date,ecv.hepatitisB_results)),11) as hepatitisB_Result,
+	mid(max(concat(ecv.visit_date,ecv.hepatitisB_treated)),11) as hepatitisB_TRx,
+	mid(max(concat(ecv.visit_date,ecv.alcohol_screened)),11) as alcohol_screened,
+	mid(max(concat(ecv.visit_date,ecv.risk_red_counselling_ebi_provided)),11) as ebi_education,
+	mid(max(concat(ecv.visit_date,ecv.risk_red_counselling_support)),11) as risk_reduction_education,
+	mid(max(concat(ecv.visit_date,ecv.violence_treated)),11) as post_violence,
+	mid(max(concat(ecv.visit_date,ecv.lubes_no)),11) as no_lubes,
+    mid(max(concat(ecv.visit_date,ecv.last_hiv_test_setting)),11) as last_hiv_test,
+    date_format(max(ecv.visit_date),'%m/%d/%Y') as latest_kp_clinic_visit,
+    date_format(max(ecv.appointment_date),'%m/%d/%Y') as next_kp_clinic_visit,
+    pi1.identifier as PREP_EnrollmentNumber,
+    max(epe.visit_date) as LatestPrEPEnrollmentDate,
+    mid(max(concat(epe.visit_date, epe.patient_type)), 11) as PatientType,
+     max(epmr.visit_date) as MostRecentRefillDate,
+  mid(max(concat(epmr.visit_date, epmr.prep_status)), 11) as PrEPStatus, 
+  max(epmr.next_appointment) as NextPrEPTCA,
+  enc.NumOfClinicVisitEncounter,
+  enc.NumOfHTSEncounter,
+  u.username as username,
+  ece.date_created
+from kenyaemr_etl.etl_patient_program epp
+inner join kenyaemr_etl.etl_patient_demographics epd on epp.patient_id=epd.patient_id
+inner join kenyaemr_etl.etl_client_enrollment ece on epp.patient_id=ece.client_id
+inner join kenyaemr_etl.etl_contact ec on epp.patient_id=ec.client_id
+inner join openmrs.users u on ece.encounter_provider=u.user_id
+left join  kenyaemr_etl.etl_clinical_visit ecv on epp.patient_id = ecv.client_id
+left join  kenyaemr_etl.etl_prep_enrolment epe on epp.patient_id = epe.patient_id
+left join  kenyaemr_etl.etl_drug_event dr on epp.patient_id=dr.patient_id
+inner join  person_name pn ON ece.encounter_provider=pn.person_id
+left join  kenyaemr_etl.etl_hiv_enrollment ehe on epp.patient_id= ehe.patient_id
+left outer join kenyaemr_etl.etl_hts_test eht ON epp.patient_id=eht.patient_id
+LEFT OUTER JOIN  kenyaemr_etl.etl_prep_monthly_refill epmr  ON epe.patient_id = epmr.patient_id
+left outer join(
+		SELECT 
+		   pi2.patient_id,
+		   pi2.identifier
+		FROM patient_identifier pi2 
+		where pi2.identifier_type =16
+		)as pi1 on epd.patient_id = pi1.patient_id
+left outer join(
+	select
+	  o.person_id,
+	  CASE
+	   when o.value_coded=165083 then 'Jo Adimo'
+	   when o.value_coded=160578 then 'Jo Gogo'
+	   when o.value_coded=165084 then 'Jo Likira'
+	   when o.value_coded=105 then 'Jo Mapara'
+	   when o.value_coded=165085 then 'Jo Ochwako'
+	   when o.value_coded=165100 then 'Net Menders'
+	   when o.value_coded=162277 then 'Boat Builders'
+	   when o.value_coded=1175 then 'Boat Crews'
+	   when o.value_coded=159674 then 'Boat Owners'
+	   when o.value_coded=162198 then 'Fish driers'
+	   when o.value_coded=160549 then 'Fish traders'
+	   when o.value_coded=5622 then 'Fish Transporters'
+	   end as FFxTypologies
+	from obs o
+	where o.concept_id in (164929)
+	group by o.person_id
+) as ffx on epp.patient_id = ffx.person_id
+left outer join(
+     select
+	 patient_id,
+	 COUNT(IF(encounter_type=116, 1, NULL))as NumOfClinicVisitEncounter,
+	 COUNT(IF(encounter_type=20, 1, NULL))as NumOfHTSEncounter
+from encounter
+group by patient_id
+)as enc on epp.patient_id=enc.patient_id
+left outer join person_address pa on epp.patient_id=pa.person_id,
+kenyaemr_etl.etl_default_facility_info edfi
+where epp.program in ('KP')
+group by
+epp.patient_id
+-- order by rand()
+-- limit 30

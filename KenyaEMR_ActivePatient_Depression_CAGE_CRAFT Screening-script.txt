@@ -1,0 +1,23 @@
+USE openmrs;
+SET @startDate ='2023-01-01';
+SET @endDate='2024-01-31';
+SELECT
+    epd.unique_patient_no,
+    epd.DOB,
+    epd.Gender,
+    ecic.latest_vis_date,
+    ecic.started_on_drugs,
+    MID(MAX(CONCAT(eds.visit_date,eds.PHQ_9_rating)), 11) AS PHQ9Rating,
+    max(eds.visit_date) as MostRecentPHQ9ScreeningEncDate,
+	MID(MAX(CONCAT(ads.visit_date,ads.alcohol_drinking_frequency)), 11) AS AlcoholDrinkingFrequency,
+	MID(MAX(CONCAT(ads.visit_date,ads.smoking_frequency)), 11) AS SmokingFrequency,
+    MID(MAX(CONCAT(ads.visit_date,ads.drugs_use_frequency)), 11) AS DrugUseFrequency,
+    max(ads.visit_date) as MostRecentAlcoDrugSmokingScreeningDate,
+    ecic.latest_tca
+FROM kenyaemr_etl.etl_current_in_care ecic
+INNER JOIN  kenyaemr_etl.etl_patient_demographics epd ON ecic.patient_id=epd.patient_id
+INNER JOIN kenyaemr_etl.etl_depression_screening eds ON ecic.patient_id=eds.patient_id
+INNER JOIN kenyaemr_etl.etl_alcohol_drug_abuse_screening ads ON ecic.patient_id=ads.patient_id
+GROUP BY ecic.patient_id
+HAVING ecic.started_on_drugs <>'' AND ecic.latest_vis_date BETWEEN @startDate AND @endDate
+
